@@ -1,0 +1,11 @@
+__pycache__/
+.pytest_cache/
+.venv/
+.env
+data/*.json
+data/test_artifacts/
+!data/.gitkeep
+frontend/.next/
+frontend/node_modules/
+pytest-cache-files-*/
+*.pyc

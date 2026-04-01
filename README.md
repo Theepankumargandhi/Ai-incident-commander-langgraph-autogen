@@ -303,7 +303,3 @@ The next natural upgrades for this project are:
 4. stronger memory over past incidents
 5. deeper benchmark datasets
 6. authentication and role based access
-
-## Resume ready summary
-
-Built a real time AI driven DevOps incident response platform using LangGraph for workflow orchestration and AutoGen for investigation logic, with policy based remediation, human approval, live event streaming, benchmark comparison, and a professional operator console.

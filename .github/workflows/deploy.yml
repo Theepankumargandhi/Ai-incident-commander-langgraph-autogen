@@ -48,16 +48,39 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Validate deployment configuration
+        id: preflight
+        env:
+          AWS_GITHUB_ACTIONS_ROLE_ARN: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+          TF_STATE_LOCK_TABLE: ${{ secrets.TF_STATE_LOCK_TABLE }}
+        run: |
+          missing=0
+          for name in AWS_REGION TF_VAR_cluster_name TF_VAR_environment AWS_GITHUB_ACTIONS_ROLE_ARN TF_STATE_BUCKET TF_STATE_LOCK_TABLE TF_VAR_db_password TF_VAR_openai_api_key; do
+            if [ -z "${!name}" ]; then
+              echo "::notice::Skipping terraform plan because $name is not configured."
+              missing=1
+            fi
+          done
+          if [ "$missing" -eq 1 ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Configure AWS credentials
+        if: steps.preflight.outputs.ready == 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Set up Terraform
+        if: steps.preflight.outputs.ready == 'true'
         uses: hashicorp/setup-terraform@v3
 
       - name: Terraform init
+        if: steps.preflight.outputs.ready == 'true'
         run: |
           terraform -chdir=terraform init \
             -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
@@ -66,11 +89,13 @@ jobs:
             -backend-config="dynamodb_table=${{ secrets.TF_STATE_LOCK_TABLE }}"
 
       - name: Terraform validate
+        if: steps.preflight.outputs.ready == 'true'
         run: |
           terraform -chdir=terraform fmt -check
           terraform -chdir=terraform validate
 
       - name: Terraform plan
+        if: steps.preflight.outputs.ready == 'true'
         run: terraform -chdir=terraform plan -input=false -no-color
 
   deploy:
@@ -81,16 +106,39 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Validate deployment configuration
+        id: preflight
+        env:
+          AWS_GITHUB_ACTIONS_ROLE_ARN: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+          TF_STATE_LOCK_TABLE: ${{ secrets.TF_STATE_LOCK_TABLE }}
+        run: |
+          missing=0
+          for name in AWS_REGION TF_VAR_cluster_name TF_VAR_environment AWS_GITHUB_ACTIONS_ROLE_ARN TF_STATE_BUCKET TF_STATE_LOCK_TABLE TF_VAR_db_password TF_VAR_openai_api_key; do
+            if [ -z "${!name}" ]; then
+              echo "::notice::Skipping deploy because $name is not configured."
+              missing=1
+            fi
+          done
+          if [ "$missing" -eq 1 ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Configure AWS credentials
+        if: steps.preflight.outputs.ready == 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Set up Terraform
+        if: steps.preflight.outputs.ready == 'true'
         uses: hashicorp/setup-terraform@v3
 
       - name: Terraform init
+        if: steps.preflight.outputs.ready == 'true'
         run: |
           terraform -chdir=terraform init \
             -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
@@ -99,9 +147,11 @@ jobs:
             -backend-config="dynamodb_table=${{ secrets.TF_STATE_LOCK_TABLE }}"
 
       - name: Terraform apply
+        if: steps.preflight.outputs.ready == 'true'
         run: terraform -chdir=terraform apply -input=false -auto-approve
 
       - name: Capture Terraform outputs
+        if: steps.preflight.outputs.ready == 'true'
         id: tf
         run: |
           echo "backend_repo=$(terraform -chdir=terraform output -raw backend_ecr_repository_url)" >> "$GITHUB_OUTPUT"
@@ -112,9 +162,11 @@ jobs:
           echo "adot_collector_irsa_role_arn=$(terraform -chdir=terraform output -raw adot_collector_irsa_role_arn)" >> "$GITHUB_OUTPUT"
 
       - name: Log in to Amazon ECR
+        if: steps.preflight.outputs.ready == 'true'
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build and push backend image
+        if: steps.preflight.outputs.ready == 'true'
         env:
           BACKEND_REPO: ${{ steps.tf.outputs.backend_repo }}
           IMAGE_TAG: ${{ github.sha }}
@@ -123,6 +175,7 @@ jobs:
           docker push "$BACKEND_REPO:$IMAGE_TAG"
 
       - name: Build and push frontend image
+        if: steps.preflight.outputs.ready == 'true'
         env:
           FRONTEND_REPO: ${{ steps.tf.outputs.frontend_repo }}
           IMAGE_TAG: ${{ github.sha }}
@@ -135,6 +188,7 @@ jobs:
           docker push "$FRONTEND_REPO:$IMAGE_TAG"
 
       - name: Wait for EKS cluster and node group
+        if: steps.preflight.outputs.ready == 'true'
         run: |
           aws eks wait cluster-active --name "${{ vars.CLUSTER_NAME }}" --region "${{ env.AWS_REGION }}"
           aws eks wait nodegroup-active \
@@ -143,9 +197,11 @@ jobs:
             --region "${{ env.AWS_REGION }}"
 
       - name: Update kubeconfig
+        if: steps.preflight.outputs.ready == 'true'
         run: aws eks update-kubeconfig --region "${{ env.AWS_REGION }}" --name "${{ vars.CLUSTER_NAME }}"
 
       - name: Render Kubernetes manifests
+        if: steps.preflight.outputs.ready == 'true'
         env:
           BACKEND_IMAGE: ${{ steps.tf.outputs.backend_repo }}:${{ github.sha }}
           FRONTEND_IMAGE: ${{ steps.tf.outputs.frontend_repo }}:${{ github.sha }}
@@ -168,11 +224,13 @@ jobs:
           PY
 
       - name: Apply Kubernetes manifests
+        if: steps.preflight.outputs.ready == 'true'
         run: |
           kubectl apply -f rendered-k8s/namespace.yaml
           kubectl apply -f rendered-k8s/
 
       - name: Wait for rollout
+        if: steps.preflight.outputs.ready == 'true'
         run: |
           kubectl rollout status deployment/adot-collector -n ai-incident-commander --timeout=5m
           kubectl rollout status deployment/backend -n ai-incident-commander --timeout=5m

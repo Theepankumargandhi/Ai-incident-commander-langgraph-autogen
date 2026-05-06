@@ -12,6 +12,8 @@ jobs:
   test:
     name: Python Tests
     runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}
 
     steps:
       - name: Check out repository

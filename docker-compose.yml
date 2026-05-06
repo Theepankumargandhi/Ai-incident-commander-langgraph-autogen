@@ -1,0 +1,89 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: incident_commander
+      POSTGRES_USER: incident
+      POSTGRES_PASSWORD: incident
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U incident -d incident_commander"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      APP_ENV: production
+      DATA_DIR: data
+      STORAGE_BACKEND: ${STORAGE_BACKEND:-postgres}
+      POSTGRES_DSN: ${POSTGRES_DSN:-postgresql://incident:incident@postgres:5432/incident_commander}
+      POSTGRES_SCHEMA: ${POSTGRES_SCHEMA:-incident_commander}
+      ENABLE_BACKGROUND_JOBS: ${ENABLE_BACKGROUND_JOBS:-true}
+      BACKGROUND_JOB_CONCURRENCY: ${BACKGROUND_JOB_CONCURRENCY:-1}
+      AUTH_ENABLED: ${AUTH_ENABLED:-false}
+      DEFAULT_MODEL_ROUTE: ${DEFAULT_MODEL_ROUTE:-balanced-route}
+      MODEL_ROUTING_ENABLED: ${MODEL_ROUTING_ENABLED:-true}
+      OPENAI_API_BASE: ${OPENAI_API_BASE:-https://api.openai.com/v1}
+      JUDGE_MODEL: ${JUDGE_MODEL:-}
+      SYNTHETIC_GENERATION_MODEL: ${SYNTHETIC_GENERATION_MODEL:-}
+      SAFE_REMEDIATION_ENABLED: ${SAFE_REMEDIATION_ENABLED:-true}
+      SAFE_REMEDIATION_URL: ${SAFE_REMEDIATION_URL:-http://backend:8000/sandbox/remediation/execute}
+      SAFE_REMEDIATION_PROVIDER_NAME: ${SAFE_REMEDIATION_PROVIDER_NAME:-controlled-gateway}
+      SAFE_REMEDIATION_ALLOW_PRODUCTION: ${SAFE_REMEDIATION_ALLOW_PRODUCTION:-false}
+      SAFE_REMEDIATION_ALLOWED_ACTIONS: ${SAFE_REMEDIATION_ALLOWED_ACTIONS:-scale_service,restart_service}
+      SAFE_REMEDIATION_ALLOWED_ENVIRONMENTS: ${SAFE_REMEDIATION_ALLOWED_ENVIRONMENTS:-staging,qa,dev,development}
+      SAFE_REMEDIATION_ALLOWED_SERVICES: ${SAFE_REMEDIATION_ALLOWED_SERVICES:-}
+      SAFE_REMEDIATION_MIN_REPLICAS: ${SAFE_REMEDIATION_MIN_REPLICAS:-1}
+      SAFE_REMEDIATION_MAX_REPLICAS: ${SAFE_REMEDIATION_MAX_REPLICAS:-10}
+      ENABLE_RELEASE_CORRELATION: ${ENABLE_RELEASE_CORRELATION:-false}
+      GITHUB_API_BASE: ${GITHUB_API_BASE:-https://api.github.com}
+      GITHUB_REPO: ${GITHUB_REPO:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      GITHUB_ENVIRONMENT: ${GITHUB_ENVIRONMENT:-staging}
+      GITHUB_BRANCH: ${GITHUB_BRANCH:-main}
+      GITHUB_WORKFLOW_NAME: ${GITHUB_WORKFLOW_NAME:-}
+      ENABLE_TRACING: ${ENABLE_TRACING:-false}
+      TRACING_SERVICE_NAME: ${TRACING_SERVICE_NAME:-ai-incident-commander}
+      OTLP_ENDPOINT: ${OTLP_ENDPOINT:-}
+      BACKEND_BASE_URL: ${BACKEND_BASE_URL:-http://backend:8000}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
+        NEXT_PUBLIC_API_TOKEN: ${NEXT_PUBLIC_API_TOKEN:-}
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
+      NEXT_PUBLIC_API_TOKEN: ${NEXT_PUBLIC_API_TOKEN:-}
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:

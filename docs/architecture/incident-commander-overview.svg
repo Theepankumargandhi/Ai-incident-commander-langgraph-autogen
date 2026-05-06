@@ -1,0 +1,66 @@
+<svg width="1400" height="860" viewBox="0 0 1400 860" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1400" height="860" rx="36" fill="#F4EFE6"/>
+  <rect x="40" y="40" width="1320" height="780" rx="28" fill="#FCF9F2" stroke="#D8D0C4"/>
+  <text x="90" y="112" fill="#162126" font-family="Arial, sans-serif" font-size="42" font-weight="700">AI Incident Commander</text>
+  <text x="90" y="148" fill="#5F6863" font-family="Arial, sans-serif" font-size="20">LangGraph orchestration, AutoGen investigation, policy governance, safe remediation, and replayable operations history.</text>
+
+  <rect x="90" y="220" width="220" height="112" rx="22" fill="#EFF6F3" stroke="#B8D5CB"/>
+  <text x="116" y="266" fill="#117B6B" font-family="Arial, sans-serif" font-size="18" font-weight="700">Incident Sources</text>
+  <text x="116" y="298" fill="#162126" font-family="Arial, sans-serif" font-size="17">Prometheus alerts</text>
+  <text x="116" y="324" fill="#162126" font-family="Arial, sans-serif" font-size="17">Synthetic benchmark cases</text>
+
+  <rect x="370" y="190" width="280" height="172" rx="22" fill="#FFFDFC" stroke="#D8D0C4"/>
+  <text x="398" y="236" fill="#162126" font-family="Arial, sans-serif" font-size="24" font-weight="700">FastAPI Control Plane</text>
+  <text x="398" y="274" fill="#5F6863" font-family="Arial, sans-serif" font-size="17">Incident APIs</text>
+  <text x="398" y="300" fill="#5F6863" font-family="Arial, sans-serif" font-size="17">Health and connector checks</text>
+  <text x="398" y="326" fill="#5F6863" font-family="Arial, sans-serif" font-size="17">WebSocket event stream</text>
+
+  <rect x="710" y="170" width="302" height="212" rx="22" fill="#F1F5FA" stroke="#C4D2E3"/>
+  <text x="738" y="216" fill="#162126" font-family="Arial, sans-serif" font-size="24" font-weight="700">LangGraph Orchestrator</text>
+  <text x="738" y="254" fill="#5F6863" font-family="Arial, sans-serif" font-size="17">Observe</text>
+  <text x="738" y="280" fill="#5F6863" font-family="Arial, sans-serif" font-size="17">Memory lookup</text>
+  <text x="738" y="306" fill="#5F6863" font-family="Arial, sans-serif" font-size="17">Investigate</text>
+  <text x="738" y="332" fill="#5F6863" font-family="Arial, sans-serif" font-size="17">Policy gate and execute</text>
+  <text x="738" y="358" fill="#5F6863" font-family="Arial, sans-serif" font-size="17">Evaluate and store</text>
+
+  <rect x="1070" y="220" width="220" height="112" rx="22" fill="#FFF6F0" stroke="#E7C6AF"/>
+  <text x="1096" y="266" fill="#C46B36" font-family="Arial, sans-serif" font-size="18" font-weight="700">Operator Console</text>
+  <text x="1096" y="298" fill="#162126" font-family="Arial, sans-serif" font-size="17">Next.js command deck</text>
+  <text x="1096" y="324" fill="#162126" font-family="Arial, sans-serif" font-size="17">Detail routes and actions</text>
+
+  <rect x="190" y="460" width="280" height="220" rx="22" fill="#FFFDFC" stroke="#D8D0C4"/>
+  <text x="218" y="506" fill="#162126" font-family="Arial, sans-serif" font-size="24" font-weight="700">AutoGen Team</text>
+  <text x="218" y="544" fill="#5F6863" font-family="Arial, sans-serif" font-size="17">Planner agent</text>
+  <text x="218" y="570" fill="#5F6863" font-family="Arial, sans-serif" font-size="17">Investigator agent</text>
+  <text x="218" y="596" fill="#5F6863" font-family="Arial, sans-serif" font-size="17">Critic agent</text>
+  <text x="218" y="622" fill="#5F6863" font-family="Arial, sans-serif" font-size="17">Commander agent</text>
+  <text x="218" y="648" fill="#5F6863" font-family="Arial, sans-serif" font-size="17">OpenAI model backed when configured</text>
+
+  <rect x="540" y="460" width="280" height="220" rx="22" fill="#EFF6F3" stroke="#B8D5CB"/>
+  <text x="568" y="506" fill="#162126" font-family="Arial, sans-serif" font-size="24" font-weight="700">Governance Layer</text>
+  <text x="568" y="544" fill="#5F6863" font-family="Arial, sans-serif" font-size="17">Policy engine</text>
+  <text x="568" y="570" fill="#5F6863" font-family="Arial, sans-serif" font-size="17">Approval notes</text>
+  <text x="568" y="596" fill="#5F6863" font-family="Arial, sans-serif" font-size="17">Run evaluator</text>
+  <text x="568" y="622" fill="#5F6863" font-family="Arial, sans-serif" font-size="17">Failure category tracking</text>
+  <text x="568" y="648" fill="#5F6863" font-family="Arial, sans-serif" font-size="17">Benchmark regression deltas</text>
+
+  <rect x="890" y="460" width="330" height="220" rx="22" fill="#F1F5FA" stroke="#C4D2E3"/>
+  <text x="918" y="506" fill="#162126" font-family="Arial, sans-serif" font-size="24" font-weight="700">Execution and Connectors</text>
+  <text x="918" y="544" fill="#5F6863" font-family="Arial, sans-serif" font-size="17">Prometheus observability client</text>
+  <text x="918" y="570" fill="#5F6863" font-family="Arial, sans-serif" font-size="17">Slack notification client</text>
+  <text x="918" y="596" fill="#5F6863" font-family="Arial, sans-serif" font-size="17">Jira issue client</text>
+  <text x="918" y="622" fill="#5F6863" font-family="Arial, sans-serif" font-size="17">Controlled remediation endpoint</text>
+  <text x="918" y="648" fill="#5F6863" font-family="Arial, sans-serif" font-size="17">Safe fallback receipts when unconfigured</text>
+
+  <rect x="540" y="720" width="320" height="64" rx="18" fill="#FFF6F0" stroke="#E7C6AF"/>
+  <text x="568" y="760" fill="#162126" font-family="Arial, sans-serif" font-size="20" font-weight="700">JSON stores for incidents, runs, memory, tickets, and remediations</text>
+
+  <path d="M310 276H370" stroke="#7A8B88" stroke-width="4" stroke-linecap="round"/>
+  <path d="M650 276H710" stroke="#7A8B88" stroke-width="4" stroke-linecap="round"/>
+  <path d="M1012 276H1070" stroke="#7A8B88" stroke-width="4" stroke-linecap="round"/>
+  <path d="M860 382V430" stroke="#7A8B88" stroke-width="4" stroke-linecap="round"/>
+  <path d="M650 572H540" stroke="#7A8B88" stroke-width="4" stroke-linecap="round"/>
+  <path d="M820 572H890" stroke="#7A8B88" stroke-width="4" stroke-linecap="round"/>
+  <path d="M700 382V720" stroke="#7A8B88" stroke-width="4" stroke-linecap="round" stroke-dasharray="10 12"/>
+  <path d="M470 572H540" stroke="#7A8B88" stroke-width="4" stroke-linecap="round"/>
+</svg>

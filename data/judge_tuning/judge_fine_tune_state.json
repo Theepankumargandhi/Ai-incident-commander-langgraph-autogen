@@ -1,0 +1,57 @@
+{
+  "dataset_path": "D:\\Studies\\Theepan\\Studies\\Project\\gen ai Project\\autogen\\data\\judge_tuning\\judge_training_examples_50.jsonl",
+  "preview_path": "D:\\Studies\\Theepan\\Studies\\Project\\gen ai Project\\autogen\\data\\judge_tuning\\judge_training_examples_50.preview.json",
+  "example_count": 50,
+  "base_model": "gpt-4o-mini-2024-07-18",
+  "updated_at": "2026-05-06T00:11:44.997343+00:00",
+  "training_file_id": "file-8KEwSutcCWgg1jguXpfMiN",
+  "job_id": "ftjob-84EAKlBFu9IpBtPQPeF8DI3o",
+  "job_status": "running",
+  "fine_tuned_model": null,
+  "job": {
+    "object": "fine_tuning.job",
+    "id": "ftjob-84EAKlBFu9IpBtPQPeF8DI3o",
+    "model": "gpt-4o-mini-2024-07-18",
+    "created_at": 1778026207,
+    "finished_at": null,
+    "fine_tuned_model": null,
+    "organization_id": "org-9UCXc491gmxNxRfkLZJQFP7B",
+    "result_files": [],
+    "status": "running",
+    "validation_file": null,
+    "training_file": "file-8KEwSutcCWgg1jguXpfMiN",
+    "hyperparameters": {
+      "n_epochs": 3,
+      "batch_size": 1,
+      "learning_rate_multiplier": 1.8
+    },
+    "trained_tokens": null,
+    "error": {},
+    "user_provided_suffix": "incident-judge",
+    "seed": 967179543,
+    "estimated_finish": null,
+    "integrations": [],
+    "metadata": {
+      "project": "ai-incident-commander",
+      "use_case": "incident-judge",
+      "example_count": "50"
+    },
+    "usage_metrics": null,
+    "shared_with_openai": false,
+    "eval_id": null,
+    "internal_worker_backend": null,
+    "internal_peashooter_execution": null,
+    "train_experiment_id": null,
+    "eval_experiment_id": null,
+    "method": {
+      "type": "supervised",
+      "supervised": {
+        "hyperparameters": {
+          "n_epochs": 3,
+          "batch_size": 1,
+          "learning_rate_multiplier": 1.8
+        }
+      }
+    }
+  }
+}

@@ -197,6 +197,13 @@ select {
   margin-bottom: 18px;
 }
 
+.panel-action {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-end;
+}
+
 .panel-header h2 {
   margin: 0;
   font-size: 1.5rem;
@@ -221,6 +228,13 @@ select {
   gap: 10px;
 }
 
+.button-column {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-end;
+}
+
 .primary-button,
 .secondary-button {
   display: inline-flex;
@@ -243,6 +257,28 @@ select {
   border-color: rgba(35, 53, 59, 0.1);
 }
 
+.control-input {
+  min-width: 220px;
+  padding: 11px 14px;
+  border: 1px solid rgba(35, 53, 59, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--ink);
+  outline: none;
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.control-input:focus {
+  border-color: rgba(17, 123, 107, 0.34);
+  box-shadow: 0 0 0 4px rgba(17, 123, 107, 0.1);
+}
+
+.control-textarea {
+  width: 100%;
+  min-height: 110px;
+  resize: vertical;
+}
+
 button:disabled {
   opacity: 0.55;
   cursor: not-allowed;
@@ -258,13 +294,13 @@ button:disabled {
 }
 
 .incident-card {
+  display: grid;
+  gap: 12px;
   width: 100%;
   padding: 16px;
-  text-align: left;
   border-radius: 18px;
   border: 1px solid transparent;
   background: rgba(255, 255, 255, 0.58);
-  cursor: pointer;
   transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
 }
 
@@ -273,6 +309,39 @@ button:disabled {
   transform: translateY(-2px);
   border-color: rgba(17, 123, 107, 0.28);
   background: rgba(255, 255, 255, 0.88);
+}
+
+.incident-card-trigger {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  padding: 0;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.incident-card-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ghost-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 999px;
+  color: var(--teal);
+  text-decoration: none;
+  background: rgba(17, 123, 107, 0.08);
+  transition: background 180ms ease, color 180ms ease;
+}
+
+.ghost-link:hover {
+  background: rgba(17, 123, 107, 0.14);
+  color: #0e5f55;
 }
 
 .incident-card-topline {
@@ -413,6 +482,10 @@ button:disabled {
   gap: 18px;
 }
 
+.output-grid-triple {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .benchmark-strip {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -531,8 +604,19 @@ button:disabled {
   .dual-list,
   .benchmark-strip,
   .output-grid,
+  .output-grid-triple,
   .profile-grid,
   .evaluation-card {
     grid-template-columns: 1fr;
+  }
+
+  .panel-action,
+  .button-column {
+    align-items: stretch;
+  }
+
+  .control-input {
+    min-width: 0;
+    width: 100%;
   }
 }

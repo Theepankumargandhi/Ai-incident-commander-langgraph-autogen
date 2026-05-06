@@ -1,144 +1,294 @@
 # AI Incident Commander
 
-AI Incident Commander is a real time DevOps incident response platform built to show how modern agentic AI systems can support operations teams during live service failures.
+[![CI](https://github.com/Theepankumargandhi/Ai-incident-commander-langgraph-autogen/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Theepankumargandhi/Ai-incident-commander-langgraph-autogen/actions/workflows/ci.yml)
 
-The project combines LangGraph for workflow orchestration, AutoGen for investigation logic, FastAPI for the backend, and Next.js for a live operator console. It is designed as a strong portfolio project that demonstrates incident triage, root cause analysis, policy driven remediation, human approval, benchmarking, evaluation, and replayable runs.
+AI Incident Commander is a real time DevOps incident response platform that shows how agentic AI can support operators during live service failures.
 
-## Why this project exists
+The project combines LangGraph for workflow orchestration, AutoGen for multi agent investigation, FastAPI for the backend control plane, and Next.js for a command center style operator console. It is built to feel like a real internal platform rather than a chatbot demo.
 
-When production incidents happen, engineers usually move through the same sequence again and again. They read the alert, inspect metrics, scan logs, compare with older incidents, decide whether a remediation is safe, notify the right people, and later write down what happened.
+The current architecture uses a `12 agent AutoGen investigation team` inside a `10 stage LangGraph workflow`, which makes the system feel much closer to an internal incident intelligence platform than a simple agent demo.
 
-This project turns that process into an AI assisted workflow.
+## The Problem
 
-Instead of acting like a chatbot, the system behaves like an AI incident commander. It receives an incident, enriches it with observability context, investigates likely causes, proposes actions, applies policy checks, waits for approval when risk is high, executes safe actions, and records the full run for later review.
+During an active incident, engineers often spend the first `15 to 20 minutes` just gathering context across dashboards, logs, release history, runbooks, and past tickets before they can decide on a safe first action. That delay is expensive because the service is already degraded while the human operator is still assembling the story.
 
-## What the platform does
+AI Incident Commander compresses that context-gathering phase into a structured AI-assisted triage workflow. Instead of forcing an engineer to hunt through disconnected tools, the platform assembles evidence, ranks likely causes, proposes controlled remediations, and makes approval boundaries explicit in one place.
 
-1. Accepts incidents from the API or from built in sample payloads.
-2. Enriches incidents with observability signals and historical memory.
-3. Runs an investigation workflow using LangGraph and AutoGen.
-4. Produces a suspected root cause, supporting evidence, confidence score, and recommended actions.
-5. Applies a policy engine to decide whether actions are safe, blocked, or require approval.
-6. Executes allowed actions through the action executor.
-7. Stores runs, events, tickets, messages, and benchmark summaries.
-8. Streams the latest run activity to the frontend through WebSockets.
-9. Benchmarks multiple prompt profiles and compares their performance.
+## What Is Implemented Now
 
-## Real world value
+The current version is a strong end to end platform prototype with real connector paths and safe fallbacks.
 
-In a real DevOps or SRE setting, this kind of system can help reduce mean time to resolution, standardize incident handling, and lower the amount of manual triage work required from engineers.
+### Live capabilities already in place
 
-It is especially useful for scenarios such as:
+1. FastAPI incident API and WebSocket replay stream
+2. LangGraph style orchestration with observability, memory, graph, multimodal, feedback, causal, investigation, policy, execution, and evaluation stages
+3. AutoGen multi agent runtime with route specific planner, investigator, critic, and commander model selection
+4. Extended AutoGen collaboration with runbook, release correlation, causal, graph, artifact, feedback, remediation review, and postmortem writing roles
+5. Background job execution for incident processing and benchmark packs
+6. Postgres backed persistence with automatic fallback to JSON stores for local demo mode
+7. Normalized Postgres projections for incidents, runs, actions, policy decisions, benchmarks, memory, and remediation receipts
+8. Prompt profile benchmarking with score, confidence, judge score, and regression tracking across model routes
+9. Historical incident memory with weighted retrieval over symptoms, metrics, prior remediation quality, abstract lessons, and service playbooks
+10. LLM as a judge scoring with heuristic fallback for root cause quality, evidence sufficiency, action safety, explanation quality, and postmortem usefulness
+11. Rule based reflection and correction that revises risky or weak recommendations before finalization
+12. Synthetic incident generation for noisy, incomplete, false positive, and hard benchmark scenarios
+13. Causal root cause reasoning over service dependencies, propagation paths, and release correlation
+14. Adversarial incident simulation lab for noisy, conflicting, and cascading-failure benchmark scenarios
+15. Self-improving optimizer that recommends better profiles, model routes, memory strategy, and prompt adjustments from benchmark history
+16. Run comparison, failure taxonomy analytics, root cause trends, and Markdown postmortem export
+17. Bearer token based viewer, operator, and remediation access controls
+18. Structured logging plus OpenTelemetry tracing wired for AWS X-Ray export through an OTLP collector
+19. GitHub release correlation support for staging and deployment context
+20. Controlled remediation gateway with action allowlists, environment guards, and auditable receipts
+21. Next.js operator console with role aware actions, model route selection, queued jobs, run comparison, approval notes, remediation history, judge output, audience summaries, adversarial lab execution, optimizer guidance, feedback learning, and graph context
+22. Dockerfiles and docker compose support for local deployment
+23. Artifact-guided multimodal reasoning over attached Grafana screenshots, architecture diagrams, and trace artifacts using their titles, descriptions, extracted text, annotations, and related service links
+24. Human feedback learning that folds approvals, overrides, and corrections back into future investigations
+25. A service knowledge graph that feeds blast radius, dependency paths, and graph-backed causal reasoning
 
-1. latency spikes after heavy traffic
-2. error rate increases after a deployment
-3. recurring incidents that look similar to known failures
-4. situations where operators need approval gated automation instead of blind execution
+### Real connectors with safe fallback behavior
 
-## Core architecture
+1. Prometheus can be used as a real observability source. If it is not configured, the platform falls back to local synthetic observability snapshots.
+2. Slack can send real notifications through `chat.postMessage`. If it is not configured, messages are still recorded locally for replay and demo purposes.
+3. Jira can create real issues through the Jira Cloud REST API. If it is not configured, ticket records are still stored locally.
+4. Controlled remediation can call a real internal HTTP endpoint. If it is not configured, the run still records a remediation receipt instead of silently failing.
+5. AutoGen can run a real model backed multi agent investigation. If model access is unavailable, the platform falls back to a deterministic local investigation path.
 
-The platform uses each framework for a specific job.
+## Benchmark Results
 
-1. LangGraph acts as the outer orchestration layer.
-2. AutoGen acts as the investigation layer.
-3. FastAPI exposes the backend APIs and WebSocket stream.
-4. Next.js provides the operator console.
-5. Local JSON storage keeps the project easy to run and demo.
+The table below was captured on `May 5, 2026` by running the built-in five-case sample benchmark pack across the three default prompt profiles. This particular capture was taken in local demo mode, so the platform used its implemented heuristic judge fallback and offline embedding fallback instead of hosted model calls.
 
-## Project flow
+| Profile | Cases | Root Cause Quality | Action Safety Score | Avg Confidence | Judge Score | Root Cause Match Rate |
+| --- | --- | --- | --- | --- | --- | --- |
+| `balanced-v1` | 5 | 81.60 | 78.40 | 0.796 | 94.60 | 1.00 |
+| `conservative-v1` | 5 | 71.40 | 72.00 | 0.732 | 87.00 | 1.00 |
+| `aggressive-v1` | 5 | 81.60 | 78.40 | 0.872 | 94.60 | 1.00 |
+
+`Root Cause Quality` and `Action Safety Score` are averaged from the per-run evaluation sub-scores. `Judge Score` is the evaluator's judge value, which falls back to the implemented heuristic judge when the hosted judge model is unavailable.
+
+## Architecture
+
+![Architecture overview](docs/architecture/incident-commander-overview.svg)
 
 ```mermaid
 flowchart TD
-    A[Incident arrives through API or sample action] --> B[Incident stored in local incident store]
-    B --> C[LangGraph orchestrator starts a run]
-    C --> D[Observability context collected]
-    D --> E[Historical memory lookup]
-    E --> F[AutoGen investigation team analyzes the incident]
-    F --> G[Root cause, evidence, confidence, and actions produced]
-    G --> H[Policy engine evaluates each action]
-    H --> I{Approval required}
-    I -->|Yes| J[Run pauses and waits for operator approval]
-    J --> K[Approved actions resume]
-    I -->|No| K[Allowed actions continue]
-    K --> L[Action executor sends notifications or creates tickets]
-    L --> M[Run evaluator scores the result]
-    M --> N[Run, events, tickets, and messages stored]
-    N --> O[Frontend command deck refreshes and WebSocket stream updates]
-    N --> P[Benchmark engine compares prompt profiles]
+    A[Incident arrives from API or sample injection] --> B[Incident is stored]
+    B --> C[observe: load observability and release context]
+    C --> D[memory: retrieve related incidents and playbooks]
+    D --> E[graph: build service graph context and blast radius]
+    E --> F[multimodal: analyze artifact text, annotations, and service links]
+    F --> G[feedback: load approvals, overrides, and operator corrections]
+    G --> H[causal: rank likely dependency and release-driven causes]
+    H --> I[investigate: 12-agent AutoGen team produces root cause, evidence, summaries, and actions]
+    I --> J[policy: verdict each action as allow, block, or approval-required]
+    J --> K{Human approval required}
+    K -->|Yes| L[Pause run and wait for operator decision]
+    L --> M[execute: resume with approved actions]
+    K -->|No| M[execute: run safe actions immediately]
+    M --> N[finalize: evaluate run, persist outputs, and update memory]
+    N --> O[Refresh API, replay rail, analytics, optimizer, and benchmark history]
 ```
-
-## High level workflow
 
 ```mermaid
 sequenceDiagram
     participant Operator
-    participant Frontend
+    participant Console as Next.js Console
     participant API as FastAPI
-    participant Graph as LangGraph
-    participant Agents as AutoGen Team
+    participant Graph as LangGraph 10-stage workflow
+    participant Team as AutoGen 12-agent team
     participant Policy
-    participant Executor
+    participant Exec as Connector Executor
     participant Store
 
-    Operator->>Frontend: Create or select incident
-    Frontend->>API: Request incident processing
+    Operator->>Console: Create or select incident
+    Console->>API: Process incident or queue benchmark run
     API->>Graph: Start workflow
-    Graph->>Agents: Investigate incident
-    Agents-->>Graph: Root cause and actions
-    Graph->>Policy: Check action safety
+    Graph->>Graph: Observe signals and fetch release metadata
+    Graph->>Graph: Retrieve memory, graph context, multimodal artifacts, and feedback
+    Graph->>Team: Run multi-agent investigation
+    Team-->>Graph: Root cause, evidence, summaries, and recommended actions
+    Graph->>Policy: Evaluate action safety
     Policy-->>Graph: Allow, block, or require approval
-    Graph->>Executor: Execute safe actions
-    Executor-->>Store: Save messages and tickets
-    Graph-->>Store: Save run and evaluation
-    API-->>Frontend: Return updated run
-    API-->>Frontend: Stream live events by WebSocket
+    Graph->>Exec: Execute safe or approved actions
+    Exec-->>Store: Persist tickets, messages, and remediation receipts
+    Graph-->>Store: Persist run, memory updates, evaluation, and postmortem output
+    API-->>Console: Return updated incident state
+    API-->>Console: Stream replay events and refreshed benchmark data
 ```
 
-## Tech stack
+## Product Screenshots
 
-### Backend
+### Command deck overview
 
-1. FastAPI
-2. Pydantic
-3. LangGraph
-4. AutoGen
-5. Local JSON persistence
+![Dashboard overview](docs/assets/dashboard-overview.png)
 
-### Frontend
+### Active investigation and replay stream
 
-1. Next.js App Router
-2. TypeScript
-3. Framer Motion
-4. Recharts
-5. Custom CSS design system
+![Active investigation](docs/assets/active-investigation.png)
 
-## Current implementation
+### GenAI reasoning layers
 
-The current version is a strong local prototype and demo platform.
+![GenAI reasoning layers](docs/assets/benchmark-and-governance.png)
 
-### Implemented now
+### Core responsibilities
 
-1. Incident creation and listing
-2. LangGraph based orchestration with fallback support
-3. AutoGen investigation adapter with heuristic local fallback
-4. Policy based action gating
-5. Human approval flow
-6. Action execution layer
-7. Replayable event stream
-8. Prompt profile benchmarking
-9. Evaluation summaries
-10. Professional Next.js operator dashboard
+1. `LangGraph` owns the outer workflow.
+2. `AutoGen` owns the investigation team inside that workflow.
+3. `FastAPI` exposes the API, health checks, and event stream.
+4. `Next.js` gives operators a live command deck.
+5. The storage layer can run on Postgres and fall back to JSON for local demo mode.
 
-### Mocked for local development
+### Advanced platform features
 
-1. Observability integrations
-2. Ticketing integration
-3. Chat notifications
-4. Production remediation systems
+The current codebase also includes these higher weightage engineering layers:
 
-This choice keeps the project easy to run while still showing the full product design clearly.
+1. background workers for asynchronous incident and benchmark execution
+2. normalized relational projections on top of the Postgres payload store
+3. OpenTelemetry tracing with per-stage and per-agent spans, carrying `incident_id` and `run_id`, and designed to flow into AWS X-Ray through the in-cluster ADOT collector
+4. model routing so different agent roles can use different models
+5. weighted historical memory retrieval and search
+6. automatic postmortem generation and Markdown export
+7. role aware operator workflows in the frontend
+8. replay comparison between runs for the same incident
+9. analytics for recurring root causes, failure taxonomy, and benchmark performance
+10. release correlation from GitHub Actions metadata for staging aware investigations
+11. explanation bundles for operator, executive, engineering, and postmortem audiences
+12. synthetic incident generation for benchmark hardening
+13. causal reasoning over service dependency graphs before the main multi-agent investigation begins
+14. adversarial simulation and optimizer loops that turn benchmark history into system improvement recommendations
+15. artifact-guided multimodal reasoning over screenshot descriptions, extracted annotations, architecture notes, and trace text
+16. operator feedback learning that changes future guidance, preferred actions, and discouraged actions
+17. service graph reasoning that enriches causal analysis with blast radius and dependency paths
 
-## Repository structure
+## Investigation Stack
+
+### Agent Justification
+
+1. `PlannerAgent` breaks the incident into a clean investigation plan and decides which evidence streams should speak first. It should stay separate from final synthesis because planning too early around a preferred answer makes the rest of the team less useful.
+2. `InvestigatorAgent` gathers observability, historical memory, and policy context through tools before the team makes claims. It should not be merged with the runbook or commander roles because raw evidence collection needs a stricter, source-first prompt than summary writing.
+3. `RunbookAgent` extracts reusable remediation patterns, service playbook hints, and lessons from prior incidents. It should stay separate from `InvestigatorAgent` so historical guidance does not drown out what is unique about the current incident.
+4. `ReleaseCorrelationAgent` isolates deployment and release metadata as its own hypothesis stream. It should not be merged into general investigation because release signals are often tempting but misleading, so they are safer when treated as a falsifiable specialist view.
+5. `CausalAnalystAgent` reasons over propagation paths, likely root services, and dependency-driven failure chains. It needs to remain distinct from graph explanation because causal ranking is different from simply describing topology.
+6. `VisualReasoningAgent` works on artifact metadata, extracted text, annotations, and related service links from screenshots, diagrams, and trace artifacts. It should stay separate from log and metric analysis because artifact interpretation uses a different evidence shape and different failure modes.
+7. `GraphReasoningAgent` explains the service graph, blast radius, and upstream or downstream impact around the focal service. It should not be merged with `CausalAnalystAgent` because graph structure is stable context, while causal reasoning is a probabilistic conclusion built on top of that context.
+8. `CriticAgent` pressure-tests the draft investigation for missing evidence, weak assumptions, and overconfident conclusions. It must remain separate from `CommanderAgent` so the final answer is challenged instead of self-approved.
+9. `FeedbackLearningAgent` pulls prior approvals, overrides, and operator corrections into the current run. It should not be merged with the runbook layer because human feedback is normative guidance about how operators actually respond, not just generic historical procedure.
+10. `RemediationReviewerAgent` scores action safety and separates reversible actions from risky ones. It stays separate from the general critic because remediation governance is a narrower, policy-shaped problem than broad investigation quality.
+11. `PostmortemWriterAgent` prepares operator, executive, engineering, and postmortem-ready summaries from the same incident. It should not be merged with `CommanderAgent` because audience-specific communication deserves its own pass before the final structured payload is locked.
+12. `CommanderAgent` turns the team’s work into the final structured investigation result, action set, explanation bundle, and JSON payload. It should stay at the end of the chain because synthesis is strongest when every specialist has already contributed and the critique loop has finished.
+
+### LangGraph workflow stages
+
+The outer workflow currently moves through:
+
+1. observe
+2. memory
+3. graph
+4. multimodal
+5. feedback
+6. causal
+7. investigate
+8. policy
+9. execute
+10. finalize
+
+## The Real Time Value
+
+In a real SRE or DevOps setting, this platform helps teams reduce manual triage and respond with more consistency.
+
+Typical scenarios include:
+
+1. checkout latency spikes
+2. elevated error rates after a deployment
+3. recurring incidents that match older postmortems
+4. incidents where remediation must be policy gated before execution
+
+The main value is not just analysis. The value is safe action.
+
+The system helps teams move from manual firefighting to AI assisted triage, policy checked execution, and replayable incident history.
+
+## Operator Experience
+
+The frontend is designed as an incident command deck rather than a generic admin dashboard.
+
+The main console includes:
+
+1. a live incident queue
+2. an active investigation panel
+3. a replay rail for run events
+4. benchmark comparison and regression history
+5. model route selection and role aware operator actions
+6. severity distribution analytics
+7. tickets, notifications, and remediation receipts
+8. memory abstractions, connector status, queued jobs, and evaluation context
+9. postmortem export and previous run comparison
+10. judge scoring, rule based reflection notes, and audience specific summaries
+11. artifact-guided multimodal reasoning, feedback learning, and service graph context inside the investigation view
+
+There is also a dedicated detail route at `/incidents/[incidentId]` so a single incident can be reviewed with full context.
+
+## Connector Matrix
+
+| Layer | Real path | Fallback path |
+| --- | --- | --- |
+| Storage | Postgres collections | Local JSON stores |
+| Observability | Prometheus instant queries | Local synthetic metrics and logs |
+| Notifications | Slack `chat.postMessage` | Stored message records |
+| Ticketing | Jira issue creation | Stored ticket records |
+| Remediation | Controlled gateway with allowlists and environment checks | Stored remediation receipts |
+| Investigation | AutoGen plus OpenAI model | Deterministic heuristic investigation |
+
+## Security And Access Model
+
+The project includes lightweight role based bearer token checks for three access levels:
+
+1. viewer
+2. operator
+3. remediation endpoint caller
+
+This is intentionally simple so the repo stays easy to run locally.
+
+For a true production deployment, you would usually place the backend behind:
+
+1. a real identity provider
+2. a server side session layer
+3. a reverse proxy with proper user claims
+
+The current token model is still useful for internal demos, Postman workflows, CI checks, and controlled local deployments.
+
+## Health And Observability Endpoints
+
+The backend exposes a few helpful operational endpoints:
+
+1. `GET /health`
+2. `GET /health/live`
+3. `GET /health/ready`
+4. `GET /health/connectors`
+
+These make it easy to verify whether the service is alive, ready, and running in real mode or fallback mode for each connector.
+
+## Notable API Endpoints
+
+Beyond the health routes, a few endpoints are especially useful during demos and evaluation:
+
+1. `POST /incidents/{incident_id}/process` to run or queue an investigation
+2. `POST /benchmarks/sample/run` to run or queue the sample benchmark pack
+3. `GET /jobs` to inspect background work
+4. `GET /analytics/summary` to review root cause and failure trends
+5. `GET /runs/compare` to diff two runs for the same incident
+6. `GET /runs/{run_id}/postmortem.md` to export a Markdown postmortem
+7. `GET /memory/search` to query stored incident memory
+8. `GET /model-routes` to inspect the available model routing strategies
+9. `POST /synthetic/benchmark-cases` to generate harder benchmark cases
+10. `POST /synthetic/incidents` to generate and optionally persist synthetic incidents
+11. `POST /lab/adversarial/run` to execute the adversarial simulation and evaluation lab
+12. `GET /optimizer/recommendation` to inspect the latest optimizer guidance from benchmark history
+13. `POST /incidents/{incident_id}/artifacts` to attach multimodal incident artifacts
+14. `GET /service-graph` to inspect the service dependency graph or a service scoped view
+15. `GET /feedback/summary` to inspect learned operator guidance for a service
+16. `POST /runs/{run_id}/feedback` to record corrections, overrides, and operator preferences
+
+## Repository Structure
 
 ```text
 autogen/
@@ -151,155 +301,174 @@ autogen/
     main.py
     models.py
   data/
+  docs/
+    architecture/
+    assets/
   frontend/
     src/
+    Dockerfile
     next.config.ts
     package.json
   tests/
   .env.example
+  Dockerfile
+  docker-compose.yml
   requirements.txt
   README.md
 ```
 
-## Backend entry points
+## Environment Setup
 
-The main backend entrypoint is `app/main.py`.
+### Backend environment
 
-Important modules:
+Copy `.env.example` to `.env` and fill in only the connectors you want to run live.
 
-1. `app/main.py`
-   Starts the FastAPI app and wires the service container.
+The most important values are:
 
-2. `app/workflow/langgraph_orchestrator.py`
-   Runs the orchestration flow for investigation, policy checks, execution, and finalization.
+1. `OPENAI_API_KEY` for real AutoGen investigation
+2. `OPENAI_API_BASE`, `JUDGE_MODEL`, and `SYNTHETIC_GENERATION_MODEL` for judge evaluation and synthetic incident generation
+3. `AUTOGEN_PLANNER_MODEL`, `AUTOGEN_INVESTIGATOR_MODEL`, `AUTOGEN_CRITIC_MODEL`, and `AUTOGEN_COMMANDER_MODEL` if you want per role model routing
+4. `STORAGE_BACKEND`, `POSTGRES_DSN`, and `POSTGRES_SCHEMA` for durable database storage
+5. `ENABLE_BACKGROUND_JOBS` and `BACKGROUND_JOB_CONCURRENCY` for asynchronous processing
+6. `PROMETHEUS_BASE_URL` and `PROMETHEUS_BEARER_TOKEN` for live observability
+7. `ENABLE_RELEASE_CORRELATION`, `GITHUB_REPO`, `GITHUB_TOKEN`, and `GITHUB_WORKFLOW_NAME` for release metadata from GitHub Actions
+8. `SLACK_BOT_TOKEN` and `SLACK_CHANNEL` for notifications
+9. `JIRA_BASE_URL`, `JIRA_EMAIL`, and `JIRA_API_TOKEN` for ticketing
+10. `SAFE_REMEDIATION_URL` and `REMEDIATION_TOKEN` for controlled action execution
+11. `SAFE_REMEDIATION_ALLOWED_ACTIONS`, `SAFE_REMEDIATION_ALLOWED_ENVIRONMENTS`, and `SAFE_REMEDIATION_ALLOWED_SERVICES` for gateway policy
+12. `ENABLE_TRACING`, `TRACING_SERVICE_NAME`, and `OTLP_ENDPOINT` for distributed tracing
+13. `AUTH_ENABLED`, `VIEWER_API_TOKEN`, and `OPERATOR_API_TOKEN` if you want the API protected
 
-3. `app/workflow/autogen_team.py`
-   Produces the investigation result with root cause, evidence, confidence, and actions.
+### Frontend environment
 
-4. `app/services/incident_service.py`
-   Handles the application service layer across incidents, runs, approvals, and benchmarks.
+Copy `frontend/.env.local.example` to `frontend/.env.local`.
 
-5. `app/core/`
-   Contains memory, policy, evaluation, benchmark, profiles, storage, and sample data modules.
+You can leave `NEXT_PUBLIC_API_BASE_URL` empty if you want the frontend to infer the backend from the same hostname on port `8000`.
 
-## Frontend experience
+Only set `NEXT_PUBLIC_API_TOKEN` if you enable backend auth and want the browser to call the protected API directly.
 
-The frontend is intentionally designed as a command deck rather than a generic admin page.
-
-The console includes:
-
-1. an incident queue
-2. an active investigation panel
-3. a replay rail for live events
-4. benchmarking charts
-5. severity analytics
-6. ticket and alert output
-7. profile and scoring panels
-
-The main frontend view lives in `frontend/src/components/incident-console.tsx`.
-
-## API endpoints
-
-### Health and metadata
-
-1. `GET /health`
-2. `GET /profiles`
-
-### Incident operations
-
-1. `GET /incidents`
-2. `POST /incidents`
-3. `POST /incidents/sample`
-4. `GET /incidents/{incident_id}`
-5. `POST /incidents/{incident_id}/process`
-6. `POST /incidents/{incident_id}/approval`
-
-### Run and replay operations
-
-1. `GET /runs`
-2. `GET /runs/{run_id}`
-3. `GET /runs/{run_id}/replay`
-4. `WS /ws/incidents/{incident_id}`
-
-### Output and benchmark operations
-
-1. `GET /tickets`
-2. `GET /messages`
-3. `POST /benchmarks/run`
-4. `GET /benchmarks/history`
-5. `GET /benchmarks/sample`
-6. `POST /benchmarks/sample/run`
-
-## Local setup
+## Running Locally
 
 ### Backend
 
-1. Create and activate your Python environment.
-2. Install dependencies.
-
 ```bash
 python -m pip install -r requirements.txt
-```
-
-3. Copy `.env.example` to `.env`.
-4. Add your `OPENAI_API_KEY` if you want the real model backed path enabled.
-5. Start the backend.
-
-```bash
 uvicorn app.main:app --reload
 ```
 
 ### Frontend
 
-1. Move into the frontend folder.
-
 ```bash
 cd frontend
-```
-
-2. Install frontend dependencies.
-
-```bash
 npm install
-```
-
-3. Start the frontend.
-
-```bash
 npm run dev
 ```
 
-4. Open the local URL printed by Next.js.
+### Quick demo flow
 
-## How to demo the project
+1. Open the frontend.
+2. Create a sample incident.
+3. Run the workflow live or queue it as a background job.
+4. Review the replay rail, evidence, and policy decisions.
+5. Compare the latest run with the previous run for the same incident.
+6. Add approval notes if the incident pauses for approval.
+7. Export the generated postmortem.
+8. Run or queue sample benchmarks to populate regression history.
 
-1. Start the backend.
-2. Start the frontend.
-3. Open the command deck.
-4. Click `New sample` or `Inject and investigate`.
-5. Watch the queue, investigation panel, replay rail, and output panels update.
-6. Run the sample benchmark to populate the profile comparison chart.
+## Running With Docker
 
-## Why LangGraph and AutoGen are both used
+The repository now includes a backend `Dockerfile`, a frontend `Dockerfile`, and a `docker-compose.yml`.
 
-This project uses both frameworks intentionally instead of mixing them without a reason.
+Use:
 
-LangGraph is responsible for durable workflow structure. It controls the stages of the incident run, including investigation, policy checks, execution, and pause or resume behavior around approvals.
+```bash
+docker compose up --build
+```
 
-AutoGen is responsible for the investigation layer. It produces the reasoning oriented output such as suspected root cause, evidence, confidence, and recommended actions.
+The compose setup does three useful things by default:
 
-In short:
+1. starts a Postgres instance for durable storage
+2. exposes the backend on port `8000`
+3. exposes the frontend on port `3000`
+4. enables a safe loopback remediation path by pointing `SAFE_REMEDIATION_URL` at the backend sandbox remediation endpoint unless you override it
 
-1. LangGraph controls the flow.
-2. AutoGen performs the investigation logic inside the flow.
+That loopback path is intentionally conservative. It proves the full remediation round trip without touching a real production system.
 
-## Future improvements
+## Cloud Deployment Notes
 
-The next natural upgrades for this project are:
+This project is deployment ready enough for demo environments and internal showcases, but there is still one important caveat.
 
-1. real Grafana and Prometheus ingestion
-2. real Slack and Jira integrations
-3. real Kubernetes or cloud safe action adapters
-4. stronger memory over past incidents
-5. deeper benchmark datasets
-6. authentication and role based access
+The app can already use Postgres for incidents, runs, tickets, benchmarks, memory, and remediation receipts. The JSON backend still exists because it is useful for local demos and offline walkthroughs. For a real hosted environment, you should prefer the Postgres path and treat JSON only as the fallback mode.
+
+If you deploy on Render, Railway, Azure, or AWS App Runner, the easiest path is:
+
+1. deploy the backend with the root `Dockerfile`
+2. deploy the frontend with `frontend/Dockerfile`
+3. provide the connector environment variables through the platform secret manager
+4. keep `STORAGE_BACKEND=postgres` and point `POSTGRES_DSN` at your managed database
+
+The next production-hardening steps after that are:
+
+1. managed identity and stronger role based access
+2. production Prometheus or Grafana connectivity with real secrets handling
+3. real Kubernetes or cloud safe action adapters instead of only the controlled gateway path
+4. deeper benchmark packs and incident memory tuned from real operator usage
+
+## Testing And Verification
+
+The project is set up so you can quickly verify both layers:
+
+### Backend
+
+```bash
+pytest -q
+```
+
+### Frontend
+
+```bash
+cd frontend
+npm run build
+```
+
+## Demo Assets
+
+The repository includes a portfolio asset checklist in `docs/assets/README.md`.
+
+That file tells you exactly which screenshots and GIF captures to add for a stronger public GitHub presentation:
+
+1. dashboard overview
+2. incident detail route
+3. benchmark comparison
+4. full walkthrough GIF
+
+The repository now also includes live screenshots captured from the running app:
+
+1. `docs/assets/dashboard-overview.png`
+2. `docs/assets/active-investigation.png`
+3. `docs/assets/benchmark-and-governance.png`
+
+## Key Files To Explore
+
+1. `app/main.py`
+2. `app/services/incident_service.py`
+3. `app/workflow/langgraph_orchestrator.py`
+4. `app/workflow/autogen_team.py`
+5. `app/integrations/observability.py`
+6. `app/integrations/tickets.py`
+7. `app/integrations/chat.py`
+8. `app/integrations/remediation.py`
+9. `app/core/safe_remediation.py`
+10. `app/core/storage.py`
+11. `frontend/src/components/incident-console.tsx`
+12. `frontend/src/app/incidents/[incidentId]/page.tsx`
+
+## Resume Ready Summary
+
+Built a real time AI incident response platform that combines LangGraph for durable workflow orchestration and AutoGen for multi agent investigation, with Postgres backed persistence, Prometheus, Slack, Jira, a controlled remediation gateway, policy based approval gates, replayable event logs, benchmarking, memory retrieval, and a live operator console in Next.js.
+
+## Resume Ready Bullets
+
+1. Built an AI incident response platform that combines a `12 agent AutoGen investigation team` with a `10 stage LangGraph workflow` for triage, graph-backed causal reasoning, policy gating, remediation, and postmortem generation.
+2. Added artifact-guided multimodal reasoning, operator feedback learning, and a service knowledge graph so the system can reason over screenshot annotations, dependency paths, and human corrections instead of relying only on raw alert text.
+3. Engineered benchmark, adversarial evaluation, judge scoring with heuristic fallback, rule-based correction, memory retrieval, and optimizer loops to measure and improve root cause quality, action safety, latency, and remediation effectiveness over time.

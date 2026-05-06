@@ -1,7 +1,9 @@
 __pycache__/
 .pytest_cache/
 .venv/
+.claude/
 .env
+frontend/.env.local
 data/*.json
 data/test_artifacts/
 !data/.gitkeep
@@ -9,3 +11,9 @@ frontend/.next/
 frontend/node_modules/
 pytest-cache-files-*/
 *.pyc
+*.log
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/*.tfvars
+terraform/*.tfvars.json

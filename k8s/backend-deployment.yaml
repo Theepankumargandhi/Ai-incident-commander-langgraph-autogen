@@ -23,6 +23,17 @@ spec:
           ports:
             - containerPort: 8000
               name: http
+          env:
+            - name: JUDGE_FINE_TUNED_MODEL
+              valueFrom:
+                secretKeyRef:
+                  name: backend-app-env
+                  key: JUDGE_FINE_TUNED_MODEL
+            - name: SLACK_SIGNING_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: backend-app-env
+                  key: SLACK_SIGNING_SECRET
           envFrom:
             - secretRef:
                 name: backend-app-env

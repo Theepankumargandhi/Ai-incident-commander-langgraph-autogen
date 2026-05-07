@@ -319,6 +319,16 @@ class AutoGenInvestigationTeam:
             )
 
         async def runbook_tool_impl() -> str:
+            runbook_hits = incident.context.get("runbook_hits", [])
+            if runbook_hits:
+                return json.dumps(
+                    {
+                        "source": "runbook_rag",
+                        "citations": runbook_hits[:5],
+                    },
+                    indent=2,
+                    default=str,
+                )
             if memory_hits:
                 snippets = []
                 for item in memory_hits[:3]:
@@ -935,6 +945,14 @@ class AutoGenInvestigationTeam:
             evidence.append(f"Release hint detected: {observability['release_hint']}")
             notes["release_agent"] = f"Recent deployment correlation found for {observability['release_hint']}."
 
+        if observability.get("anomaly_detected"):
+            anomaly = observability.get("anomaly_detection", {})
+            evidence.append(f"Isolation Forest anomaly signal: {anomaly.get('summary', 'anomalous telemetry detected')}")
+            notes["anomaly_agent"] = (
+                "Real ML anomaly detection ran on Prometheus metrics before AutoGen investigation."
+            )
+            confidence += 0.05
+
         if causal_context.get("likely_cause"):
             evidence.append(f"Causal reasoning suggests: {causal_context['likely_cause']}")
             notes["causal_agent"] = "Dependency-path analysis contributed to the root-cause shortlist."
@@ -944,6 +962,12 @@ class AutoGenInvestigationTeam:
 
         if observability.get("logs"):
             evidence.append(f"Sample log: {observability['logs'][0]}")
+
+        runbook_hits = incident.context.get("runbook_hits", [])
+        if runbook_hits:
+            top = runbook_hits[0]
+            evidence.append(f"Runbook citation: {top.get('title')} - {top.get('excerpt')}")
+            notes["runbook_agent"] = "Runbook RAG retrieved operator procedures before final recommendations."
 
         confidence = max(0.35, min(confidence + profile.confidence_bias, 0.97))
         if profile.aggressiveness_bias < 0:

@@ -124,6 +124,33 @@ class MemoryHit(BaseModel):
     discouraged_actions: list[str] = Field(default_factory=list)
 
 
+class RunbookDocument(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    title: str
+    content: str
+    service: str | None = None
+    environment: str | None = None
+    source_path: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    checksum: str = ""
+    embedding_vector: list[float] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class RunbookSearchHit(BaseModel):
+    document_id: str
+    title: str
+    excerpt: str
+    score: float
+    service: str | None = None
+    environment: str | None = None
+    source_path: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    matched_terms: list[str] = Field(default_factory=list)
+
+
 class MemoryEntry(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     incident_id: str
@@ -349,6 +376,21 @@ class PolicyDocument(BaseModel):
     updated_at: datetime = Field(default_factory=utc_now)
     updated_by: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class JudgeFineTuneState(BaseModel):
+    id: str
+    job_id: str
+    job_status: str = ""
+    fine_tuned_model: str | None = None
+    training_file_id: str | None = None
+    dataset_path: str | None = None
+    preview_path: str | None = None
+    example_count: int = 0
+    base_model: str | None = None
+    job: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
 
 
 class OpenAIUsageLineItem(BaseModel):
@@ -585,6 +627,9 @@ class ObservabilitySnapshot(BaseModel):
     traces: list[str] = Field(default_factory=list)
     release_hint: str | None = None
     provider: str = "mock"
+    anomaly_detected: bool = False
+    anomaly_score: float = 0.0
+    anomaly_detection: dict[str, Any] = Field(default_factory=dict)
     query_details: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -695,6 +740,26 @@ class AnalyticsSummary(BaseModel):
     top_failure_categories: list[dict[str, Any]] = Field(default_factory=list)
     action_outcomes: dict[str, int] = Field(default_factory=dict)
     profile_win_rates: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class DoraSreMetric(BaseModel):
+    key: str
+    label: str
+    value: float
+    unit: str
+    target: float | None = None
+    status: str = "watch"
+    description: str
+
+
+class DoraSreDashboard(BaseModel):
+    generated_at: datetime = Field(default_factory=utc_now)
+    window_days: int = 30
+    metrics: list[DoraSreMetric] = Field(default_factory=list)
+    dora: dict[str, float | str] = Field(default_factory=dict)
+    sre: dict[str, float | str] = Field(default_factory=dict)
+    methodology: list[str] = Field(default_factory=list)
+    details: dict[str, Any] = Field(default_factory=dict)
 
 
 Incident.model_rebuild()

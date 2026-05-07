@@ -43,6 +43,8 @@ class Settings:
     app_name: str = "AI Incident Commander"
     app_env: str = "development"
     data_dir: Path = Path("data")
+    plugin_dir: Path | None = None
+    runbook_dir: Path | None = None
     storage_backend: str = "auto"
     postgres_dsn: str | None = None
     postgres_schema: str = "incident_commander"
@@ -74,6 +76,9 @@ class Settings:
     slack_signing_secret: str | None = None
     slack_channel: str = "#ops-oncall"
     slack_api_base: str = "https://slack.com/api"
+    pagerduty_webhook_secret: str | None = None
+    opsgenie_webhook_secret: str | None = None
+    opsgenie_webhook_secret_header: str = "x-opsgenie-webhook-secret"
     jira_base_url: str | None = None
     jira_email: str | None = None
     jira_api_token: str | None = None
@@ -89,6 +94,11 @@ class Settings:
         'sum(rate(http_requests_total{service="{service}",status=~"5.."}[5m])) / sum(rate(http_requests_total{service="{service}"}[5m]))'
     )
     prometheus_uptime_query_template: str = 'avg(up{job="{service}"})'
+    enable_anomaly_detection: bool = True
+    anomaly_lookback_minutes: int = 30
+    anomaly_step_seconds: int = 60
+    anomaly_contamination: float = 0.1
+    anomaly_min_samples: int = 12
     enable_release_correlation: bool = False
     github_api_base: str = "https://api.github.com"
     github_repo: str | None = None
@@ -119,6 +129,10 @@ def get_settings() -> Settings:
     base_dir = Path(__file__).resolve().parents[1]
     data_dir = base_dir / os.getenv("DATA_DIR", "data")
     data_dir.mkdir(parents=True, exist_ok=True)
+    plugin_dir_raw = os.getenv("PLUGIN_DIR")
+    plugin_dir = Path(plugin_dir_raw).expanduser() if plugin_dir_raw else None
+    runbook_dir_raw = os.getenv("RUNBOOK_DIR")
+    runbook_dir = Path(runbook_dir_raw).expanduser() if runbook_dir_raw else None
 
     jira_labels_raw = os.getenv("JIRA_LABELS", "ai-incident-commander,agentic-ai")
     jira_labels = tuple(label.strip() for label in jira_labels_raw.split(",") if label.strip())
@@ -139,6 +153,8 @@ def get_settings() -> Settings:
         app_name=os.getenv("APP_NAME", "AI Incident Commander"),
         app_env=os.getenv("APP_ENV", "development"),
         data_dir=data_dir,
+        plugin_dir=plugin_dir,
+        runbook_dir=runbook_dir,
         storage_backend=os.getenv("STORAGE_BACKEND", "auto").strip().lower(),
         postgres_dsn=os.getenv("POSTGRES_DSN"),
         postgres_schema=os.getenv("POSTGRES_SCHEMA", "incident_commander"),
@@ -170,6 +186,9 @@ def get_settings() -> Settings:
         slack_signing_secret=os.getenv("SLACK_SIGNING_SECRET"),
         slack_channel=os.getenv("SLACK_CHANNEL", "#ops-oncall"),
         slack_api_base=os.getenv("SLACK_API_BASE", "https://slack.com/api"),
+        pagerduty_webhook_secret=os.getenv("PAGERDUTY_WEBHOOK_SECRET"),
+        opsgenie_webhook_secret=os.getenv("OPSGENIE_WEBHOOK_SECRET"),
+        opsgenie_webhook_secret_header=os.getenv("OPSGENIE_WEBHOOK_SECRET_HEADER", "x-opsgenie-webhook-secret"),
         jira_base_url=os.getenv("JIRA_BASE_URL"),
         jira_email=os.getenv("JIRA_EMAIL"),
         jira_api_token=os.getenv("JIRA_API_TOKEN"),
@@ -190,6 +209,11 @@ def get_settings() -> Settings:
             "PROMETHEUS_UPTIME_QUERY_TEMPLATE",
             'avg(up{job="{service}"})',
         ),
+        enable_anomaly_detection=_as_bool(os.getenv("ENABLE_ANOMALY_DETECTION"), True),
+        anomaly_lookback_minutes=_as_int(os.getenv("ANOMALY_LOOKBACK_MINUTES"), 30),
+        anomaly_step_seconds=_as_int(os.getenv("ANOMALY_STEP_SECONDS"), 60),
+        anomaly_contamination=_as_float(os.getenv("ANOMALY_CONTAMINATION"), 0.1),
+        anomaly_min_samples=_as_int(os.getenv("ANOMALY_MIN_SAMPLES"), 12),
         enable_release_correlation=_as_bool(os.getenv("ENABLE_RELEASE_CORRELATION"), False),
         github_api_base=os.getenv("GITHUB_API_BASE", "https://api.github.com"),
         github_repo=os.getenv("GITHUB_REPO"),

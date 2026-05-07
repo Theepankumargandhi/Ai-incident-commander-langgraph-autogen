@@ -17,10 +17,12 @@ from app.models import (
     FeedbackRecord,
     Incident,
     IncidentRun,
+    JudgeFineTuneState,
     JobRecord,
     MemoryEntry,
     PolicyDocument,
     RemediationReceipt,
+    RunbookDocument,
     TicketRecord,
 )
 
@@ -248,6 +250,11 @@ class MemoryStore(JsonListStore):
         super().__init__(path, MemoryEntry)
 
 
+class RunbookStore(JsonListStore):
+    def __init__(self, path: Path) -> None:
+        super().__init__(path, RunbookDocument)
+
+
 class RemediationStore(JsonListStore):
     def __init__(self, path: Path) -> None:
         super().__init__(path, RemediationReceipt)
@@ -266,6 +273,11 @@ class FeedbackStore(JsonListStore):
 class PolicyDocumentStore(JsonListStore):
     def __init__(self, path: Path) -> None:
         super().__init__(path, PolicyDocument)
+
+
+class JudgeFineTuneStateStore(JsonListStore):
+    def __init__(self, path: Path) -> None:
+        super().__init__(path, JudgeFineTuneState)
 
 
 class PostgresIncidentStore(PostgresListStore[Incident]):
@@ -298,6 +310,11 @@ class PostgresMemoryStore(PostgresListStore[MemoryEntry]):
         super().__init__(dsn, schema, "memory_entries", MemoryEntry)
 
 
+class PostgresRunbookStore(PostgresListStore[RunbookDocument]):
+    def __init__(self, dsn: str, schema: str) -> None:
+        super().__init__(dsn, schema, "runbook_documents", RunbookDocument)
+
+
 class PostgresRemediationStore(PostgresListStore[RemediationReceipt]):
     def __init__(self, dsn: str, schema: str) -> None:
         super().__init__(dsn, schema, "remediation_receipts", RemediationReceipt)
@@ -318,6 +335,11 @@ class PostgresPolicyDocumentStore(PostgresListStore[PolicyDocument]):
         super().__init__(dsn, schema, "policy_documents", PolicyDocument)
 
 
+class PostgresJudgeFineTuneStateStore(PostgresListStore[JudgeFineTuneState]):
+    def __init__(self, dsn: str, schema: str) -> None:
+        super().__init__(dsn, schema, "judge_fine_tune_states", JudgeFineTuneState)
+
+
 @dataclass(slots=True)
 class StoreBundle:
     incident_store: CollectionStore[Incident]
@@ -326,10 +348,12 @@ class StoreBundle:
     ticket_store: CollectionStore[TicketRecord]
     message_store: CollectionStore[ChatMessageRecord]
     memory_store: CollectionStore[MemoryEntry]
+    runbook_store: CollectionStore[RunbookDocument]
     remediation_store: CollectionStore[RemediationReceipt]
     job_store: CollectionStore[JobRecord]
     feedback_store: CollectionStore[FeedbackRecord]
     policy_store: CollectionStore[PolicyDocument]
+    judge_fine_tune_store: CollectionStore[JudgeFineTuneState]
     healthcheck: Callable[[], ConnectorHealth]
 
 
@@ -349,10 +373,12 @@ def build_store_bundle(settings: Settings) -> StoreBundle:
             ticket_store = PostgresTicketStore(settings.postgres_dsn, settings.postgres_schema)
             message_store = PostgresMessageStore(settings.postgres_dsn, settings.postgres_schema)
             memory_store = PostgresMemoryStore(settings.postgres_dsn, settings.postgres_schema)
+            runbook_store = PostgresRunbookStore(settings.postgres_dsn, settings.postgres_schema)
             remediation_store = PostgresRemediationStore(settings.postgres_dsn, settings.postgres_schema)
             job_store = PostgresJobStore(settings.postgres_dsn, settings.postgres_schema)
             feedback_store = PostgresFeedbackStore(settings.postgres_dsn, settings.postgres_schema)
             policy_store = PostgresPolicyDocumentStore(settings.postgres_dsn, settings.postgres_schema)
+            judge_fine_tune_store = PostgresJudgeFineTuneStateStore(settings.postgres_dsn, settings.postgres_schema)
             return StoreBundle(
                 incident_store=incident_store,
                 run_store=run_store,
@@ -360,10 +386,12 @@ def build_store_bundle(settings: Settings) -> StoreBundle:
                 ticket_store=ticket_store,
                 message_store=message_store,
                 memory_store=memory_store,
+                runbook_store=runbook_store,
                 remediation_store=remediation_store,
                 job_store=job_store,
                 feedback_store=feedback_store,
                 policy_store=policy_store,
+                judge_fine_tune_store=judge_fine_tune_store,
                 healthcheck=incident_store.healthcheck,
             )
         except Exception as exc:
@@ -385,10 +413,12 @@ def _build_json_bundle(settings: Settings, fallback_reason: str | None = None) -
     ticket_store = TicketStore(settings.data_dir / "tickets.json")
     message_store = MessageStore(settings.data_dir / "messages.json")
     memory_store = MemoryStore(settings.data_dir / "memory.json")
+    runbook_store = RunbookStore(settings.data_dir / "runbooks.json")
     remediation_store = RemediationStore(settings.data_dir / "remediations.json")
     job_store = JobStore(settings.data_dir / "jobs.json")
     feedback_store = FeedbackStore(settings.data_dir / "feedback.json")
     policy_store = PolicyDocumentStore(settings.data_dir / "policy_documents.json")
+    judge_fine_tune_store = JudgeFineTuneStateStore(settings.data_dir / "judge_fine_tune_states.json")
 
     def healthcheck() -> ConnectorHealth:
         details = {
@@ -412,10 +442,12 @@ def _build_json_bundle(settings: Settings, fallback_reason: str | None = None) -
         ticket_store=ticket_store,
         message_store=message_store,
         memory_store=memory_store,
+        runbook_store=runbook_store,
         remediation_store=remediation_store,
         job_store=job_store,
         feedback_store=feedback_store,
         policy_store=policy_store,
+        judge_fine_tune_store=judge_fine_tune_store,
         healthcheck=healthcheck,
     )
 

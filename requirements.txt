@@ -15,3 +15,5 @@ opentelemetry-sdk-extension-aws>=2.0.2
 opentelemetry-instrumentation-fastapi>=0.49b0
 opentelemetry-instrumentation-httpx>=0.49b0
 pytest>=8.3.0
+locust>=2.31.0
+scikit-learn>=1.5.0

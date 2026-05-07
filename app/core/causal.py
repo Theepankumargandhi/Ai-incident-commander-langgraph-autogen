@@ -32,19 +32,25 @@ class CausalReasoningEngine:
         propagation_path = [service]
         release_correlation = bool(snapshot.release_hint)
         knowledge_graph_paths = list(graph_context.candidate_paths)
+        metrics = {**incident.metrics, **snapshot.metrics}
 
         if snapshot.release_hint:
             likely_cause = "Release regression likely introduced the incident."
             reasoning.append(f"Release metadata suggests {snapshot.release_hint}.")
-        if incident.metrics.get("error_rate", 0.0) > 0.08:
+        if metrics.get("error_rate", 0.0) > 0.08:
             likely_cause = "High error rate indicates a bad deployment or failing dependency."
             reasoning.append("Error rate crossed the high-severity threshold.")
-        if incident.metrics.get("p95_latency_ms", 0.0) > 1800:
+        if metrics.get("p95_latency_ms", 0.0) > 1800:
             candidate = dependencies[0] if dependencies else service
             likely_root_service = candidate
             likely_cause = "Dependency saturation is the most likely cause of the latency cascade."
             propagation_path = [candidate, service] if candidate != service else [service]
             reasoning.append("Latency pattern is consistent with upstream dependency saturation.")
+        if snapshot.anomaly_detected:
+            top_features = snapshot.anomaly_detection.get("top_features", [])
+            strongest = top_features[0]["metric"] if top_features else "service telemetry"
+            likely_cause = f"Anomaly detection isolated abnormal {strongest} before LLM investigation."
+            reasoning.append(snapshot.anomaly_detection.get("summary", "Isolation Forest flagged anomalous telemetry."))
 
         logs_text = " ".join(snapshot.logs).lower()
         if "timeout" in logs_text or "upstream" in logs_text:
@@ -80,10 +86,12 @@ class CausalReasoningEngine:
             reasoning.append(best_path.explanation)
 
         confidence = 0.55
-        if incident.metrics.get("p95_latency_ms", 0.0) > 1800:
+        if metrics.get("p95_latency_ms", 0.0) > 1800:
             confidence += 0.12
-        if incident.metrics.get("error_rate", 0.0) > 0.08:
+        if metrics.get("error_rate", 0.0) > 0.08:
             confidence += 0.12
+        if snapshot.anomaly_detected:
+            confidence += 0.1
         if snapshot.release_hint:
             confidence += 0.08
         if memory_hits:

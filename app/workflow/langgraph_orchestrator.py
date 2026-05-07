@@ -13,6 +13,7 @@ from app.core.multimodal import MultimodalReasoningEngine
 from app.core.openai_usage import snapshot_openai_usage, track_openai_usage
 from app.core.policy import PolicyEngine
 from app.core.profiles import get_profile
+from app.core.runbooks import RunbookRAGEngine
 from app.core.tracing import generate_trace_id, set_trace_id, traced_span
 from app.integrations.executor import ActionExecutor
 from app.integrations.observability import PrometheusObservabilityClient
@@ -57,6 +58,7 @@ class LangGraphIncidentOrchestrator:
         autogen_team: AutoGenInvestigationTeam,
         observability_client: PrometheusObservabilityClient,
         action_executor: ActionExecutor,
+        runbook_engine: RunbookRAGEngine | None = None,
     ) -> None:
         self.settings = settings
         self.memory = memory
@@ -68,6 +70,7 @@ class LangGraphIncidentOrchestrator:
         self.autogen_team = autogen_team
         self.observability_client = observability_client
         self.action_executor = action_executor
+        self.runbook_engine = runbook_engine
 
     def _workflow_span_attributes(self, incident: Incident, run: IncidentRun, stage: str, job_id: str | None = None) -> dict[str, str]:
         return {
@@ -193,9 +196,17 @@ class LangGraphIncidentOrchestrator:
             with traced_span("langgraph.stage.observe", self._workflow_span_attributes(incident, run, "observe", job_id)):
                 await _publish(_evt("observe", "started", "Collecting observability signals."))
                 snapshot = self.observability_client.collect(incident)
+                incident.metrics.update(snapshot.metrics)
                 incident.context["observability"] = snapshot.model_dump(mode="json")
                 run.connector_status = self._connector_status()
-                _e = _evt("observe", "completed", "Observability signals collected.", {"provider": snapshot.provider, "log_count": len(snapshot.logs), "has_release_hint": bool(snapshot.release_hint)})
+                _e = _evt("observe", "completed", "Observability signals collected.", {
+                    "provider": snapshot.provider,
+                    "log_count": len(snapshot.logs),
+                    "has_release_hint": bool(snapshot.release_hint),
+                    "anomaly_detected": snapshot.anomaly_detected,
+                    "anomaly_score": snapshot.anomaly_score,
+                    "anomaly_summary": snapshot.anomaly_detection.get("summary"),
+                })
                 run.event_log.append(_e.model_dump(mode="json"))
                 await _publish(_e)
 
@@ -203,7 +214,14 @@ class LangGraphIncidentOrchestrator:
             with traced_span("langgraph.stage.memory", self._workflow_span_attributes(incident, run, "memory", job_id)):
                 await _publish(_evt("memory", "started", "Searching historical incident memory."))
                 run.memory_hits = self.memory.find_similar(incident)
-                _e = _evt("memory", "completed", f"Matched {len(run.memory_hits)} historical incidents.", {"count": len(run.memory_hits)})
+                runbook_hits = self.runbook_engine.retrieve_for_incident(incident) if self.runbook_engine else []
+                incident.context["runbook_hits"] = [item.model_dump(mode="json") for item in runbook_hits]
+                _e = _evt(
+                    "memory",
+                    "completed",
+                    f"Matched {len(run.memory_hits)} historical incidents and {len(runbook_hits)} runbook snippets.",
+                    {"count": len(run.memory_hits), "runbook_count": len(runbook_hits)},
+                )
                 run.event_log.append(_e.model_dump(mode="json"))
                 await _publish(_e)
 
@@ -331,9 +349,17 @@ class LangGraphIncidentOrchestrator:
                 state["incident"].status = IncidentStatus.investigating
                 state["incident"].updated_at = utc_now()
                 snapshot = self.observability_client.collect(state["incident"])
+                state["incident"].metrics.update(snapshot.metrics)
                 state["incident"].context["observability"] = snapshot.model_dump(mode="json")
                 run.connector_status = self._connector_status()
-                e = _evt("observe", "completed", "Observability signals collected.", {"provider": snapshot.provider, "log_count": len(snapshot.logs), "has_release_hint": bool(snapshot.release_hint)})
+                e = _evt("observe", "completed", "Observability signals collected.", {
+                    "provider": snapshot.provider,
+                    "log_count": len(snapshot.logs),
+                    "has_release_hint": bool(snapshot.release_hint),
+                    "anomaly_detected": snapshot.anomaly_detected,
+                    "anomaly_score": snapshot.anomaly_score,
+                    "anomaly_summary": snapshot.anomaly_detection.get("summary"),
+                })
                 run.event_log.append(e.model_dump(mode="json"))
                 await _publish(e)
             return state
@@ -343,7 +369,14 @@ class LangGraphIncidentOrchestrator:
             with traced_span("langgraph.stage.memory", self._workflow_span_attributes(state["incident"], run, "memory", job_id)):
                 await _publish(_evt("memory", "started", "Searching historical incident memory."))
                 run.memory_hits = self.memory.find_similar(state["incident"])
-                e = _evt("memory", "completed", f"Matched {len(run.memory_hits)} historical incidents.", {"count": len(run.memory_hits)})
+                runbook_hits = self.runbook_engine.retrieve_for_incident(state["incident"]) if self.runbook_engine else []
+                state["incident"].context["runbook_hits"] = [item.model_dump(mode="json") for item in runbook_hits]
+                e = _evt(
+                    "memory",
+                    "completed",
+                    f"Matched {len(run.memory_hits)} historical incidents and {len(runbook_hits)} runbook snippets.",
+                    {"count": len(run.memory_hits), "runbook_count": len(runbook_hits)},
+                )
                 run.event_log.append(e.model_dump(mode="json"))
                 await _publish(e)
             return state

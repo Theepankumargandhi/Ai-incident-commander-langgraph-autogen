@@ -17,6 +17,7 @@ from app.core.benchmark import BenchmarkEngine
 from app.core.causal import CausalReasoningEngine
 from app.core.evaluation import RunEvaluator
 from app.core.feedback import FeedbackLearningLoop
+from app.core.judge_tuning import JudgeFineTuneManager
 from app.core.jobs import BackgroundJobManager
 from app.core.logging import configure_logging
 from app.core.memory import IncidentMemory
@@ -26,6 +27,7 @@ from app.core.postmortem import PostmortemExporter
 from app.core.policy import PolicyEngine
 from app.core.profiles import list_model_routes, list_profiles
 from app.core.projections import NormalizedPostgresProjector, NullProjector
+from app.core.runbooks import RunbookRAGEngine
 from app.core.safe_remediation import SafeRemediationGateway
 from app.core.sample_data import sample_benchmark_cases, sample_incident
 from app.core.simulation import AdversarialSimulationLab
@@ -39,6 +41,12 @@ from app.integrations.observability import PrometheusObservabilityClient
 from app.integrations.release_metadata import GitHubReleaseMetadataClient
 from app.integrations.remediation import ControlledRemediationClient
 from app.integrations.tickets import JiraTicketingClient
+from app.integrations.webhooks import (
+    opsgenie_payload_to_incident,
+    pagerduty_payload_to_incident,
+    verify_hmac_sha256_signature,
+    verify_static_token,
+)
 from app.models import (
     AddEdgeRequest,
     AddNodeRequest,
@@ -52,10 +60,12 @@ from app.models import (
     HealthReport,
     PolicyDocumentUpdateRequest,
     RemediationRequest,
+    RunbookDocument,
     ServiceGraphEdge,
     ServiceGraphNode,
     SyntheticGenerationRequest,
 )
+from app.plugins.registry import PluginRegistry, set_default_registry
 from app.services.incident_service import IncidentEventBus, IncidentService
 from app.workflow.autogen_team import AutoGenInvestigationTeam
 from app.workflow.langgraph_orchestrator import LangGraphIncidentOrchestrator
@@ -95,15 +105,19 @@ def build_service(settings: Settings) -> IncidentService:
     ticket_store = store_bundle.ticket_store
     message_store = store_bundle.message_store
     memory_store = store_bundle.memory_store
+    runbook_store = store_bundle.runbook_store
     remediation_store = store_bundle.remediation_store
     job_store = store_bundle.job_store
     feedback_store = store_bundle.feedback_store
+    judge_fine_tune_store = store_bundle.judge_fine_tune_store
     memory = IncidentMemory(memory_store, api_key=settings.openai_api_key, api_base=settings.openai_api_base)
+    runbook_engine = RunbookRAGEngine(runbook_store, settings)
     policy = PolicyEngine(settings, store_bundle.policy_store)
     service_graph = ServiceKnowledgeGraph()
     causal_engine = CausalReasoningEngine(service_graph)
     multimodal_engine = MultimodalReasoningEngine(settings)
     feedback_loop = FeedbackLearningLoop(feedback_store, memory_store)
+    judge_fine_tune_manager = JudgeFineTuneManager(settings, judge_fine_tune_store)
     optimizer = AgentOptimizer()
     autogen_team = AutoGenInvestigationTeam(settings)
     release_client = GitHubReleaseMetadataClient(settings)
@@ -117,13 +131,14 @@ def build_service(settings: Settings) -> IncidentService:
         settings,
         memory,
         policy,
-        RunEvaluator(settings),
+        RunEvaluator(settings, judge_fine_tune_store),
         causal_engine,
         multimodal_engine,
         feedback_loop,
         autogen_team,
         observability_client,
         action_executor,
+        runbook_engine,
     )
     synthetic_generator = SyntheticIncidentGenerator(settings)
     try:
@@ -154,6 +169,8 @@ def build_service(settings: Settings) -> IncidentService:
         simulation_lab=AdversarialSimulationLab(synthetic_generator, optimizer),
         feedback_loop=feedback_loop,
         service_graph=service_graph,
+        judge_fine_tune_manager=judge_fine_tune_manager,
+        runbook_engine=runbook_engine,
     )
 
 
@@ -161,6 +178,13 @@ def build_service(settings: Settings) -> IncidentService:
 async def lifespan(app: FastAPI):
     app.state.settings = APP_SETTINGS
     app.state.service = build_service(APP_SETTINGS)
+    store_bundle = app.state.service
+    app.state.plugin_registry = PluginRegistry(
+        APP_SETTINGS,
+        message_store=store_bundle.message_store,
+        ticket_store=store_bundle.ticket_store,
+    ).discover()
+    set_default_registry(app.state.plugin_registry)
     app.state.job_manager = BackgroundJobManager(
         app.state.service,
         concurrency=APP_SETTINGS.background_job_concurrency,
@@ -259,6 +283,14 @@ async def get_model_routes(
     return [route.model_dump(mode="json") for route in list_model_routes()]
 
 
+@app.get("/plugins")
+async def list_plugins(
+    _auth: AuthContext = Depends(require_viewer(APP_SETTINGS)),
+) -> list[dict]:
+    registry: PluginRegistry = app.state.plugin_registry
+    return registry.list_plugins()
+
+
 @app.get("/policy/document")
 async def get_policy_document(
     _auth: AuthContext = Depends(require_viewer(APP_SETTINGS)),
@@ -274,6 +306,50 @@ async def update_policy_document(
 ) -> dict:
     service: IncidentService = app.state.service
     return service.update_policy_document(payload).model_dump(mode="json")
+
+
+@app.post("/judge/fine-tune")
+async def start_judge_fine_tune(
+    count: int = Query(default=50, ge=1, le=200),
+    suffix: str = Query(default="incident-judge", min_length=1, max_length=40),
+    _auth: AuthContext = Depends(require_operator(APP_SETTINGS)),
+) -> dict:
+    service: IncidentService = app.state.service
+    try:
+        state = await service.judge_fine_tune_manager.start_fine_tune(count=count, suffix=suffix)
+    except RuntimeError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except Exception as error:
+        raise HTTPException(status_code=502, detail=f"Unable to start judge fine-tune job: {error}") from error
+    return {
+        "job_id": state.get("job_id"),
+        "status": state.get("job_status"),
+        "fine_tuned_model": state.get("fine_tuned_model"),
+        "training_file_id": state.get("training_file_id"),
+        "example_count": state.get("example_count"),
+    }
+
+
+@app.get("/judge/fine-tune/{job_id}")
+async def get_judge_fine_tune_status(
+    job_id: str,
+    _auth: AuthContext = Depends(require_viewer(APP_SETTINGS)),
+) -> dict:
+    service: IncidentService = app.state.service
+    try:
+        state = await service.judge_fine_tune_manager.refresh_fine_tune_status(job_id)
+    except RuntimeError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except Exception as error:
+        raise HTTPException(status_code=502, detail=f"Unable to refresh judge fine-tune job: {error}") from error
+    return {
+        "job_id": state.get("job_id") or job_id,
+        "status": state.get("job_status"),
+        "fine_tuned_model": state.get("fine_tuned_model"),
+        "model_ready": service.judge_fine_tune_manager.fine_tune_model_ready(state),
+        "training_file_id": state.get("training_file_id"),
+        "example_count": state.get("example_count"),
+    }
 
 
 @app.get("/auth/me")
@@ -426,6 +502,74 @@ async def handle_slack_interactivity(request: Request) -> dict:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
 
+@app.post("/webhooks/pagerduty")
+async def receive_pagerduty_webhook(request: Request) -> dict:
+    service: IncidentService = app.state.service
+    settings: Settings = app.state.settings
+    if not settings.pagerduty_webhook_secret:
+        raise HTTPException(status_code=503, detail="PagerDuty webhook secret is not configured.")
+
+    raw_body = await request.body()
+    if not verify_hmac_sha256_signature(
+        raw_body,
+        settings.pagerduty_webhook_secret,
+        request.headers.get("x-pagerduty-signature"),
+    ):
+        raise HTTPException(status_code=401, detail="Invalid PagerDuty webhook signature.")
+
+    try:
+        payload = json.loads(raw_body.decode("utf-8"))
+        incident_request = pagerduty_payload_to_incident(payload)
+        incident = service.create_incident(incident_request)
+        run = await service.process_incident(
+            incident.id,
+            trace_id=request.headers.get("X-Trace-Id"),
+        )
+    except json.JSONDecodeError as error:
+        raise HTTPException(status_code=400, detail="Invalid PagerDuty webhook JSON.") from error
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+    return {
+        "provider": "pagerduty",
+        "incident": incident.model_dump(mode="json"),
+        "run": run.model_dump(mode="json"),
+    }
+
+
+@app.post("/webhooks/opsgenie")
+async def receive_opsgenie_webhook(request: Request) -> dict:
+    service: IncidentService = app.state.service
+    settings: Settings = app.state.settings
+    if not settings.opsgenie_webhook_secret:
+        raise HTTPException(status_code=503, detail="OpsGenie webhook secret is not configured.")
+
+    raw_body = await request.body()
+    configured_header = settings.opsgenie_webhook_secret_header or "x-opsgenie-webhook-secret"
+    token = request.headers.get(configured_header) or request.headers.get("x-opsgenie-token") or request.headers.get("authorization")
+    if not verify_static_token(settings.opsgenie_webhook_secret, token):
+        raise HTTPException(status_code=401, detail="Invalid OpsGenie webhook token.")
+
+    try:
+        payload = json.loads(raw_body.decode("utf-8"))
+        incident_request = opsgenie_payload_to_incident(payload)
+        incident = service.create_incident(incident_request)
+        run = await service.process_incident(
+            incident.id,
+            trace_id=request.headers.get("X-Trace-Id"),
+        )
+    except json.JSONDecodeError as error:
+        raise HTTPException(status_code=400, detail="Invalid OpsGenie webhook JSON.") from error
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+    return {
+        "provider": "opsgenie",
+        "incident": incident.model_dump(mode="json"),
+        "run": run.model_dump(mode="json"),
+    }
+
+
 @app.get("/runs")
 async def list_runs(
     _auth: AuthContext = Depends(require_viewer(APP_SETTINGS)),
@@ -470,6 +614,50 @@ async def list_memory_entries(
 ) -> list[dict]:
     service: IncidentService = app.state.service
     return [entry.model_dump(mode="json") for entry in service.list_memory_entries()]
+
+
+@app.get("/runbooks")
+async def list_runbooks(
+    _auth: AuthContext = Depends(require_viewer(APP_SETTINGS)),
+) -> list[dict]:
+    service: IncidentService = app.state.service
+    return [entry.model_dump(mode="json") for entry in service.list_runbooks()]
+
+
+@app.post("/runbooks")
+async def create_runbook(
+    payload: RunbookDocument,
+    _auth: AuthContext = Depends(require_operator(APP_SETTINGS)),
+) -> dict:
+    service: IncidentService = app.state.service
+    try:
+        document = service.create_runbook(payload)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return document.model_dump(mode="json")
+
+
+@app.post("/runbooks/ingest")
+async def ingest_runbooks(
+    _auth: AuthContext = Depends(require_operator(APP_SETTINGS)),
+) -> list[dict]:
+    service: IncidentService = app.state.service
+    return [document.model_dump(mode="json") for document in service.ingest_runbooks()]
+
+
+@app.get("/runbooks/search")
+async def search_runbooks(
+    query: str = Query(..., min_length=1),
+    service_name: str | None = Query(default=None, alias="service"),
+    environment: str | None = Query(default=None),
+    limit: int = Query(default=5, ge=1, le=20),
+    _auth: AuthContext = Depends(require_viewer(APP_SETTINGS)),
+) -> list[dict]:
+    service: IncidentService = app.state.service
+    return [
+        hit.model_dump(mode="json")
+        for hit in service.search_runbooks(query, service=service_name, environment=environment, limit=limit)
+    ]
 
 
 @app.get("/feedback")
@@ -614,6 +802,15 @@ async def analytics_summary(
 ) -> dict:
     service: IncidentService = app.state.service
     return service.summarize_analytics().model_dump(mode="json")
+
+
+@app.get("/analytics/dora-sre")
+async def dora_sre_dashboard(
+    window_days: int = Query(default=30, ge=1, le=365),
+    _auth: AuthContext = Depends(require_viewer(APP_SETTINGS)),
+) -> dict:
+    service: IncidentService = app.state.service
+    return service.dora_sre_dashboard(window_days=window_days).model_dump(mode="json")
 
 
 @app.get("/benchmarks/sample")

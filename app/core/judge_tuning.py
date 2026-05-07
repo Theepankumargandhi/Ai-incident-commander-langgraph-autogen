@@ -9,6 +9,8 @@ from uuid import uuid4
 import httpx
 
 from app.config import Settings
+from app.core.storage import CollectionStore
+from app.models import JudgeFineTuneState, utc_now
 
 JUDGE_SYSTEM_PROMPT = (
     "You are an LLM-as-a-judge for AI incident response runs. "
@@ -36,8 +38,13 @@ def build_judge_prompt_payload(
 
 
 class JudgeFineTuneManager:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        state_store: CollectionStore[JudgeFineTuneState] | None = None,
+    ) -> None:
         self.settings = settings
+        self.state_store = state_store
 
     @property
     def tuning_dir(self) -> Path:
@@ -68,6 +75,11 @@ class JudgeFineTuneManager:
         return self.settings.judge_model or self.settings.openai_model
 
     def load_state(self) -> dict[str, Any]:
+        if self.state_store is not None:
+            states = self.state_store.list()
+            if states:
+                latest = sorted(states, key=lambda item: item.updated_at)[-1]
+                return latest.model_dump(mode="json")
         if not self.state_path.exists():
             return {}
         return json.loads(self.state_path.read_text(encoding="utf-8"))
@@ -75,7 +87,20 @@ class JudgeFineTuneManager:
     def save_state(self, state: dict[str, Any]) -> dict[str, Any]:
         state["updated_at"] = datetime.now(timezone.utc).isoformat()
         self.state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+        if self.state_store is not None and state.get("job_id"):
+            persisted = self._state_to_record(state)
+            self.state_store.save(persisted)
         return state
+
+    def load_job_state(self, job_id: str) -> dict[str, Any]:
+        if self.state_store is not None:
+            stored = self.state_store.get(job_id)
+            if stored is not None:
+                return stored.model_dump(mode="json")
+        state = self.load_state()
+        if state.get("job_id") == job_id:
+            return state
+        return {}
 
     def generate_training_examples(self, count: int = 50) -> list[dict[str, Any]]:
         scenario_templates = [
@@ -230,14 +255,15 @@ class JudgeFineTuneManager:
         self.save_state(state)
         return state
 
-    async def refresh_fine_tune_status(self) -> dict[str, Any]:
-        state = self.load_state()
-        job_id = state.get("job_id")
+    async def refresh_fine_tune_status(self, job_id: str | None = None) -> dict[str, Any]:
+        state = self.load_job_state(job_id) if job_id else self.load_state()
+        job_id = job_id or state.get("job_id")
         if not job_id:
             raise RuntimeError("No fine-tuning job has been created yet.")
         job = await self._retrieve_fine_tuning_job(str(job_id))
         state.update(
             {
+                "job_id": job.get("id", job_id),
                 "job_status": job.get("status"),
                 "fine_tuned_model": job.get("fine_tuned_model") or state.get("fine_tuned_model"),
                 "job": job,
@@ -245,6 +271,30 @@ class JudgeFineTuneManager:
         )
         self.save_state(state)
         return state
+
+    @staticmethod
+    def fine_tune_model_ready(state: dict[str, Any]) -> bool:
+        status = str(state.get("job_status", "")).lower()
+        return bool(state.get("fine_tuned_model") and status in {"succeeded", "success", "completed"})
+
+    def _state_to_record(self, state: dict[str, Any]) -> JudgeFineTuneState:
+        job_id = str(state.get("job_id"))
+        existing = self.state_store.get(job_id) if self.state_store is not None else None
+        created_at = existing.created_at if existing is not None else utc_now()
+        return JudgeFineTuneState(
+            id=job_id,
+            job_id=job_id,
+            job_status=str(state.get("job_status", "")),
+            fine_tuned_model=state.get("fine_tuned_model"),
+            training_file_id=state.get("training_file_id"),
+            dataset_path=state.get("dataset_path"),
+            preview_path=state.get("preview_path"),
+            example_count=int(state.get("example_count", 0) or 0),
+            base_model=state.get("base_model"),
+            job=dict(state.get("job", {})),
+            created_at=created_at,
+            updated_at=utc_now(),
+        )
 
     async def _upload_training_file(self, file_path: Path) -> str:
         headers = {"Authorization": f"Bearer {self.settings.openai_api_key}"}

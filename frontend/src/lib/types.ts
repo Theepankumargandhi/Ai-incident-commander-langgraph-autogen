@@ -427,6 +427,26 @@ export type AnalyticsSummary = {
   profile_win_rates: { profile: string; average_score: number; runs: number }[];
 };
 
+export type DoraSreMetric = {
+  key: string;
+  label: string;
+  value: number;
+  unit: string;
+  target?: number | null;
+  status: "good" | "watch" | "risk";
+  description: string;
+};
+
+export type DoraSreDashboard = {
+  generated_at: string;
+  window_days: number;
+  metrics: DoraSreMetric[];
+  dora: Record<string, number>;
+  sre: Record<string, number>;
+  methodology: string[];
+  details: Record<string, unknown>;
+};
+
 export type DashboardSnapshot = {
   incidents: Incident[];
   runs: IncidentRun[];
@@ -440,6 +460,7 @@ export type DashboardSnapshot = {
   remediations: RemediationReceipt[];
   jobs: JobRecord[];
   analytics: AnalyticsSummary | null;
+  doraSre: DoraSreDashboard | null;
   auth: AuthSession | null;
   optimizerRecommendation?: OptimizerRecommendation | null;
   feedbackSummary?: FeedbackLearningSnapshot | null;

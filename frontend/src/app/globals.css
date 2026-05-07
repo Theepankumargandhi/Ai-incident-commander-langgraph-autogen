@@ -539,6 +539,47 @@ button:disabled {
   margin-bottom: 18px;
 }
 
+.dora-layout {
+  display: grid;
+  gap: 18px;
+}
+
+.dora-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.dora-metric-card {
+  display: grid;
+  gap: 10px;
+  min-height: 164px;
+  padding: 14px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(35, 53, 59, 0.08);
+}
+
+.dora-metric-card strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 1.35rem;
+}
+
+.dora-metric-card span:last-child {
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.dora-chart-cell {
+  min-width: 0;
+}
+
+.small-chart {
+  height: 220px;
+}
+
 .evaluation-card {
   display: grid;
   grid-template-columns: 0.8fr 1.2fr;
@@ -602,6 +643,7 @@ button:disabled {
   .incident-detail-head,
   .metric-chip-row,
   .dual-list,
+  .dora-metric-grid,
   .benchmark-strip,
   .output-grid,
   .output-grid-triple,

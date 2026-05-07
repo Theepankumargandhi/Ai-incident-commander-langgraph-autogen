@@ -4,18 +4,23 @@ import json
 
 from app.config import Settings
 from app.core.judge_tuning import JUDGE_SYSTEM_PROMPT, JudgeFineTuneManager, build_judge_prompt_payload
+from app.core.storage import CollectionStore
 from app.core.llm_json import OpenAIJsonClient
 from app.core.openai_usage import snapshot_openai_usage
-from app.models import Incident, IncidentRun, IncidentStatus, PolicyVerdict, RunEvaluation
+from app.models import Incident, IncidentRun, IncidentStatus, JudgeFineTuneState, PolicyVerdict, RunEvaluation
 
 
 class RunEvaluator:
     """Score runs with heuristic signals first, then optionally blend in an LLM judge."""
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        judge_state_store: CollectionStore[JudgeFineTuneState] | None = None,
+    ) -> None:
         self.settings = settings
         self.llm_client = OpenAIJsonClient(settings)
-        self.judge_tuning = JudgeFineTuneManager(settings)
+        self.judge_tuning = JudgeFineTuneManager(settings, judge_state_store)
 
     async def evaluate(self, incident: Incident, run: IncidentRun, latency_ms: int, prompt_profile: str) -> RunEvaluation:
         heuristic_score = 52.0
@@ -184,7 +189,11 @@ class RunEvaluator:
             indent=2,
             default=str,
         )
-        model = self.judge_tuning.resolve_active_judge_model() or self.settings.openai_model
+        model = (
+            self.settings.judge_fine_tuned_model
+            or self.judge_tuning.resolve_active_judge_model()
+            or self.settings.openai_model
+        )
         return await self.llm_client.complete_json(
             model=model,
             system_prompt=JUDGE_SYSTEM_PROMPT,

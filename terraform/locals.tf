@@ -25,6 +25,7 @@ locals {
     APP_NAME                              = "AI Incident Commander"
     APP_ENV                               = var.environment
     DATA_DIR                              = "data"
+    RUNBOOK_DIR                           = "runbooks"
     STORAGE_BACKEND                       = "postgres"
     POSTGRES_DSN                          = local.postgres_dsn
     POSTGRES_SCHEMA                       = "incident_commander"
@@ -41,6 +42,7 @@ locals {
     OPENAI_API_BASE                       = "https://api.openai.com/v1"
     OPENAI_MODEL                          = "gpt-4.1-mini"
     JUDGE_MODEL                           = ""
+    JUDGE_FINE_TUNED_MODEL                = var.judge_fine_tuned_model
     SYNTHETIC_GENERATION_MODEL            = ""
     AUTOGEN_PLANNER_MODEL                 = ""
     AUTOGEN_INVESTIGATOR_MODEL            = ""
@@ -51,8 +53,12 @@ locals {
     OPERATOR_API_TOKEN                    = var.operator_api_token
     REMEDIATION_TOKEN                     = var.remediation_token
     SLACK_BOT_TOKEN                       = var.slack_bot_token
+    SLACK_SIGNING_SECRET                  = var.slack_signing_secret
     SLACK_CHANNEL                         = var.slack_channel
     SLACK_API_BASE                        = "https://slack.com/api"
+    PAGERDUTY_WEBHOOK_SECRET              = var.pagerduty_webhook_secret
+    OPSGENIE_WEBHOOK_SECRET               = var.opsgenie_webhook_secret
+    OPSGENIE_WEBHOOK_SECRET_HEADER        = "x-opsgenie-webhook-secret"
     JIRA_BASE_URL                         = var.jira_base_url
     JIRA_EMAIL                            = var.jira_email
     JIRA_API_TOKEN                        = var.jira_api_token
@@ -64,6 +70,11 @@ locals {
     PROMETHEUS_LATENCY_QUERY_TEMPLATE     = "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{service=\"{service}\"}[5m])) by (le))"
     PROMETHEUS_ERROR_QUERY_TEMPLATE       = "sum(rate(http_requests_total{service=\"{service}\",status=~\"5..\"}[5m])) / sum(rate(http_requests_total{service=\"{service}\"}[5m]))"
     PROMETHEUS_UPTIME_QUERY_TEMPLATE      = "avg(up{job=\"{service}\"})"
+    ENABLE_ANOMALY_DETECTION              = "true"
+    ANOMALY_LOOKBACK_MINUTES              = "30"
+    ANOMALY_STEP_SECONDS                  = "60"
+    ANOMALY_CONTAMINATION                 = "0.1"
+    ANOMALY_MIN_SAMPLES                   = "12"
     ENABLE_RELEASE_CORRELATION            = tostring(var.enable_release_correlation)
     GITHUB_API_BASE                       = "https://api.github.com"
     GITHUB_REPO                           = var.github_repo

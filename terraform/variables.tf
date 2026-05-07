@@ -29,6 +29,12 @@ variable "openai_api_key" {
   default     = ""
 }
 
+variable "judge_fine_tuned_model" {
+  description = "Optional fine-tuned judge model ID used by the backend evaluator."
+  type        = string
+  default     = ""
+}
+
 variable "auth_enabled" {
   description = "Enable bearer token auth in the backend."
   type        = bool
@@ -63,10 +69,31 @@ variable "slack_bot_token" {
   default     = ""
 }
 
+variable "slack_signing_secret" {
+  description = "Slack signing secret used to verify interactive requests."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 variable "slack_channel" {
   description = "Slack channel used for incident notifications."
   type        = string
   default     = "#ops-oncall"
+}
+
+variable "pagerduty_webhook_secret" {
+  description = "Secret used to verify PagerDuty webhook signatures."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "opsgenie_webhook_secret" {
+  description = "Secret token used to verify OpsGenie webhook requests."
+  type        = string
+  sensitive   = true
+  default     = ""
 }
 
 variable "jira_base_url" {

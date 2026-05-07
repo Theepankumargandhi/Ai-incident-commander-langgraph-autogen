@@ -6,6 +6,7 @@ import type {
   BenchmarkSummary,
   ChatMessageRecord,
   DashboardSnapshot,
+  DoraSreDashboard,
   FeedbackLearningSnapshot,
   FeedbackRecord,
   Incident,
@@ -65,7 +66,7 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export async function loadSnapshot(): Promise<DashboardSnapshot> {
-  const [incidents, runs, tickets, messages, benchmarks, profiles, modelRoutes, memory, feedback, remediations, jobs, analytics, auth, optimizerRecommendation, feedbackSummary, serviceGraph] = await Promise.all([
+  const [incidents, runs, tickets, messages, benchmarks, profiles, modelRoutes, memory, feedback, remediations, jobs, analytics, doraSre, auth, optimizerRecommendation, feedbackSummary, serviceGraph] = await Promise.all([
     requestJson<Incident[]>("/incidents"),
     requestJson<IncidentRun[]>("/runs"),
     requestJson<TicketRecord[]>("/tickets"),
@@ -78,6 +79,7 @@ export async function loadSnapshot(): Promise<DashboardSnapshot> {
     requestJson<RemediationReceipt[]>("/remediations"),
     requestJson<JobRecord[]>("/jobs"),
     requestJson<AnalyticsSummary>("/analytics/summary"),
+    requestJson<DoraSreDashboard>("/analytics/dora-sre"),
     requestJson<AuthSession>("/auth/me"),
     requestJson<OptimizerRecommendation>("/optimizer/recommendation"),
     requestJson<FeedbackLearningSnapshot>("/feedback/summary"),
@@ -97,6 +99,7 @@ export async function loadSnapshot(): Promise<DashboardSnapshot> {
     remediations,
     jobs,
     analytics,
+    doraSre,
     auth,
     optimizerRecommendation,
     feedbackSummary,

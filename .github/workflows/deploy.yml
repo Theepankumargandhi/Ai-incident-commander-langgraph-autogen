@@ -20,12 +20,16 @@ env:
   TF_VAR_environment: ${{ vars.ENVIRONMENT }}
   TF_VAR_db_password: ${{ secrets.TF_VAR_DB_PASSWORD }}
   TF_VAR_openai_api_key: ${{ secrets.TF_VAR_OPENAI_API_KEY }}
+  TF_VAR_judge_fine_tuned_model: ${{ vars.JUDGE_FINE_TUNED_MODEL || '' }}
   TF_VAR_auth_enabled: ${{ vars.AUTH_ENABLED || 'false' }}
   TF_VAR_viewer_api_token: ${{ secrets.TF_VAR_VIEWER_API_TOKEN }}
   TF_VAR_operator_api_token: ${{ secrets.TF_VAR_OPERATOR_API_TOKEN }}
   TF_VAR_remediation_token: ${{ secrets.TF_VAR_REMEDIATION_TOKEN }}
   TF_VAR_slack_bot_token: ${{ secrets.TF_VAR_SLACK_BOT_TOKEN }}
+  TF_VAR_slack_signing_secret: ${{ secrets.TF_VAR_SLACK_SIGNING_SECRET }}
   TF_VAR_slack_channel: ${{ vars.SLACK_CHANNEL || '#ops-oncall' }}
+  TF_VAR_pagerduty_webhook_secret: ${{ secrets.TF_VAR_PAGERDUTY_WEBHOOK_SECRET }}
+  TF_VAR_opsgenie_webhook_secret: ${{ secrets.TF_VAR_OPSGENIE_WEBHOOK_SECRET }}
   TF_VAR_jira_base_url: ${{ vars.JIRA_BASE_URL }}
   TF_VAR_jira_email: ${{ vars.JIRA_EMAIL }}
   TF_VAR_jira_api_token: ${{ secrets.TF_VAR_JIRA_API_TOKEN }}

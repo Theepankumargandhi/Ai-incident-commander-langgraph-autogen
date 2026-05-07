@@ -52,6 +52,7 @@ import type {
   BenchmarkSummary,
   ChatMessageRecord,
   DashboardSnapshot,
+  DoraSreDashboard,
   EventMessage,
   IncidentRun,
   JobRecord,
@@ -77,6 +78,7 @@ function emptySnapshot(): DashboardSnapshot {
     remediations: [],
     jobs: [],
     analytics: null,
+    doraSre: null,
     auth: null,
     optimizerRecommendation: null,
     feedbackSummary: null,
@@ -115,6 +117,32 @@ function formatTime(value?: string | null) {
     return "Pending";
   }
   return new Date(value).toLocaleString();
+}
+
+function doraTone(status: string) {
+  if (status === "good") {
+    return "success";
+  }
+  if (status === "watch") {
+    return "medium";
+  }
+  return "critical";
+}
+
+function formatMetricValue(value: number, unit: string) {
+  if (unit === "%") {
+    return `${value.toFixed(1)}%`;
+  }
+  if (unit === "usd") {
+    return `$${value.toFixed(4)}`;
+  }
+  if (unit === "ms") {
+    return `${Math.round(value)}ms`;
+  }
+  if (unit === "minutes") {
+    return `${value.toFixed(1)}m`;
+  }
+  return value.toFixed(2);
 }
 
 type Notice = {
@@ -163,6 +191,7 @@ export function IncidentConsole({ initialIncidentId = null, detailMode = false }
     [snapshot.jobs],
   );
   const analytics = snapshot.analytics;
+  const doraSre = snapshot.doraSre;
   const optimizerRecommendation = snapshot.optimizerRecommendation;
   const isViewer = snapshot.auth?.role === "viewer";
 
@@ -288,6 +317,13 @@ export function IncidentConsole({ initialIncidentId = null, detailMode = false }
       score: Number(item.average_score.toFixed(1)),
       match: Number((item.root_cause_match_rate * 100).toFixed(0)),
       confidence: Number(((item.average_confidence ?? 0) * 100).toFixed(0)),
+    }));
+  const doraChart = (doraSre?.metrics ?? [])
+    .filter((metric) => ["deployment_frequency_per_day", "change_failure_rate", "mttr_minutes", "automation_success_rate"].includes(metric.key))
+    .map((metric) => ({
+      name: metric.label.replace("Deployment ", "Deploy ").replace("Automation ", "Auto "),
+      value: Number(metric.value.toFixed(metric.unit === "%" ? 1 : 2)),
+      target: metric.target ?? undefined,
     }));
   const bestBenchmark = [...snapshot.benchmarks].sort((left, right) => right.average_score - left.average_score)[0];
   const averageBenchmarkMatch = snapshot.benchmarks.length
@@ -1211,6 +1247,12 @@ export function IncidentConsole({ initialIncidentId = null, detailMode = false }
         </motion.div>
 
         <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, delay: 0.36 }}>
+          <Panel eyebrow="DORA / SRE" title={`Reliability scorecard${doraSre ? `, last ${doraSre.window_days} days` : ""}`}>
+            <DoraSrePanel dashboard={doraSre} chartData={doraChart} />
+          </Panel>
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, delay: 0.4 }}>
           <Panel eyebrow="Governance" title="Profiles, routes, analytics, and memory">
             <div className="benchmark-strip">
               <div className="benchmark-chip">
@@ -1416,6 +1458,95 @@ export function IncidentConsole({ initialIncidentId = null, detailMode = false }
         </motion.div>
       </section>
     </main>
+  );
+}
+
+function DoraSrePanel({
+  dashboard,
+  chartData,
+}: {
+  dashboard: DoraSreDashboard | null;
+  chartData: { name: string; value: number; target?: number }[];
+}) {
+  if (!dashboard) {
+    return <div className="empty-state small">DORA and SRE metrics appear after the backend analytics endpoint is available.</div>;
+  }
+
+  return (
+    <div className="dora-layout">
+      <div className="dora-metric-grid">
+        {dashboard.metrics.slice(0, 8).map((metric) => (
+          <article className="dora-metric-card" key={metric.key}>
+            <div>
+              <p className="mono-label">{metric.label}</p>
+              <strong>{formatMetricValue(metric.value, metric.unit)}</strong>
+            </div>
+            <StatusBadge tone={doraTone(metric.status)}>{metric.status}</StatusBadge>
+            <span>{metric.description}</span>
+          </article>
+        ))}
+      </div>
+
+      <div className="output-grid output-grid-triple">
+        <div className="dora-chart-cell">
+          <div className="subhead">
+            <Gauge size={16} />
+            Operating metrics
+          </div>
+          {chartData.length ? (
+            <div className="chart-wrap small-chart">
+              <ResponsiveContainer width="100%" height={220}>
+                <ComposedChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(36, 53, 60, 0.12)" />
+                  <XAxis dataKey="name" tickLine={false} axisLine={false} />
+                  <YAxis tickLine={false} axisLine={false} />
+                  <Tooltip />
+                  <Bar dataKey="value" radius={[8, 8, 0, 0]} fill="#117b6b" />
+                  <Line type="monotone" dataKey="target" stroke="#c46b36" strokeWidth={2} dot={{ r: 3 }} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="empty-state small">No DORA metrics have enough data yet.</div>
+          )}
+        </div>
+
+        <div>
+          <div className="subhead">
+            <Activity size={16} />
+            DORA
+          </div>
+          <div className="mini-table">
+            {Object.entries(dashboard.dora).map(([key, value]) => (
+              <div className="mini-row" key={key}>
+                <div>
+                  <strong>{key.replaceAll("_", " ")}</strong>
+                  <span>Computed from incidents, runs, and remediation receipts</span>
+                </div>
+                <small>{Number(value).toFixed(2)}</small>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <div className="subhead">
+            <ShieldCheck size={16} />
+            Method
+          </div>
+          <div className="mini-table">
+            {dashboard.methodology.slice(0, 5).map((item) => (
+              <div className="mini-row" key={item}>
+                <div>
+                  <strong>{item}</strong>
+                  <span>Transparent scoring input</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 

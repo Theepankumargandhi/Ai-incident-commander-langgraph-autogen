@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import logging
+import time
 
 import httpx
 
 from app.config import Settings
+from app.core.anomaly_detection import IsolationForestMetricAnomalyDetector
 from app.core.tracing import traced_span
 from app.integrations.release_metadata import GitHubReleaseMetadataClient
 from app.models import ConnectorHealth, Incident, ObservabilitySnapshot
@@ -18,6 +20,7 @@ class PrometheusObservabilityClient:
     def __init__(self, settings: Settings, release_client: GitHubReleaseMetadataClient | None = None) -> None:
         self.settings = settings
         self.release_client = release_client
+        self.anomaly_detector = IsolationForestMetricAnomalyDetector(settings)
 
     @property
     def configured(self) -> bool:
@@ -66,6 +69,14 @@ class PrometheusObservabilityClient:
             latency_value = self._query_value(latency_query)
             error_value = self._query_value(error_query)
             uptime_value = self._query_value(uptime_query)
+            historical_samples = self._metric_history_from_context(incident)
+            historical_samples.extend(
+                self._query_metric_history(
+                    latency_query=latency_query,
+                    error_query=error_query,
+                    uptime_query=uptime_query,
+                )
+            )
 
             query_details["latency"] = {"query": latency_query, "value": latency_value}
             query_details["error_rate"] = {"query": error_query, "value": error_value}
@@ -90,7 +101,7 @@ class PrometheusObservabilityClient:
                 release_hint = f"{release_metadata.get('workflow_name', 'workflow')}#{release_metadata.get('run_number')}:{release_metadata.get('head_sha')[:7]}"
                 query_details["release_metadata"] = release_metadata
 
-            return ObservabilitySnapshot(
+            snapshot = ObservabilitySnapshot(
                 metrics=metrics,
                 logs=logs,
                 traces=traces if traces else ["Prometheus metrics collected successfully."],
@@ -98,6 +109,7 @@ class PrometheusObservabilityClient:
                 provider="prometheus",
                 query_details=query_details,
             )
+            return self._with_anomaly_detection(snapshot, historical_samples)
         except Exception as exc:  # pragma: no cover - network dependent
             logger.exception("Prometheus query failed; falling back to synthetic observability data.")
             snapshot = self._fallback_collect(incident)
@@ -125,6 +137,53 @@ class PrometheusObservabilityClient:
         if not value or len(value) < 2:
             return None
         return float(value[1])
+
+    def _query_metric_history(self, *, latency_query: str, error_query: str, uptime_query: str) -> list[dict[str, float]]:
+        end = int(time.time())
+        start = end - max(60, self.settings.anomaly_lookback_minutes * 60)
+        step = max(15, self.settings.anomaly_step_seconds)
+        latency_values = [round(value * 1000, 2) for value in self._query_range_values(latency_query, start, end, step)]
+        error_values = [round(value, 4) for value in self._query_range_values(error_query, start, end, step)]
+        uptime_values = [round(value, 4) for value in self._query_range_values(uptime_query, start, end, step)]
+        sample_count = max(len(latency_values), len(error_values), len(uptime_values))
+        samples: list[dict[str, float]] = []
+        for index in range(sample_count):
+            sample: dict[str, float] = {}
+            if index < len(latency_values):
+                sample["p95_latency_ms"] = latency_values[index]
+            if index < len(error_values):
+                sample["error_rate"] = error_values[index]
+            if index < len(uptime_values):
+                sample["up"] = uptime_values[index]
+            if sample:
+                samples.append(sample)
+        return samples
+
+    def _query_range_values(self, query: str, start: int, end: int, step: int) -> list[float]:
+        headers = {"Accept": "application/json"}
+        if self.settings.prometheus_bearer_token:
+            headers["Authorization"] = f"Bearer {self.settings.prometheus_bearer_token}"
+
+        response = httpx.get(
+            f"{self.settings.prometheus_base_url.rstrip('/')}/api/v1/query_range",
+            params={"query": query, "start": start, "end": end, "step": step},
+            headers=headers,
+            timeout=self.settings.request_timeout_seconds,
+        )
+        response.raise_for_status()
+        body = response.json()
+        result = body.get("data", {}).get("result", [])
+        if not result:
+            return []
+        values = result[0].get("values", [])
+        parsed: list[float] = []
+        for item in values:
+            if len(item) >= 2:
+                try:
+                    parsed.append(float(item[1]))
+                except (TypeError, ValueError):
+                    continue
+        return parsed
 
     def _fallback_collect(self, incident: Incident) -> ObservabilitySnapshot:
         description = f"{incident.title} {incident.description}".lower()
@@ -162,7 +221,7 @@ class PrometheusObservabilityClient:
         if not traces:
             traces.append("No trace anomalies found in the first-pass sample.")
 
-        return ObservabilitySnapshot(
+        snapshot = ObservabilitySnapshot(
             metrics=metrics,
             logs=logs,
             traces=traces,
@@ -170,3 +229,68 @@ class PrometheusObservabilityClient:
             provider="fallback",
             query_details={"release_metadata": self.release_client.latest_release() if self.release_client else None},
         )
+        return self._with_anomaly_detection(snapshot, self._fallback_metric_history(incident))
+
+    def _with_anomaly_detection(
+        self,
+        snapshot: ObservabilitySnapshot,
+        historical_samples: list[dict[str, float]],
+    ) -> ObservabilitySnapshot:
+        if not self.settings.enable_anomaly_detection:
+            snapshot.anomaly_detection = {"enabled": False, "summary": "Anomaly detection is disabled."}
+            snapshot.query_details["anomaly_detection"] = snapshot.anomaly_detection
+            return snapshot
+
+        with traced_span(
+            "observability.anomaly_detection",
+            {
+                "observability.provider": snapshot.provider,
+                "anomaly.sample_count": len(historical_samples),
+            },
+        ):
+            result = self.anomaly_detector.detect(snapshot.metrics, historical_samples)
+        snapshot.anomaly_detection = result
+        snapshot.anomaly_detected = bool(result.get("is_anomaly"))
+        snapshot.anomaly_score = float(result.get("anomaly_score", 0.0) or 0.0)
+        snapshot.query_details["anomaly_detection"] = result
+        if snapshot.anomaly_detected:
+            summary = result.get("summary", "Isolation Forest flagged anomalous telemetry.")
+            snapshot.logs.insert(0, str(summary))
+        return snapshot
+
+    @staticmethod
+    def _metric_history_from_context(incident: Incident) -> list[dict[str, float]]:
+        raw = incident.context.get("metric_history") or incident.context.get("prometheus_metric_history") or []
+        samples: list[dict[str, float]] = []
+        for item in raw if isinstance(raw, list) else []:
+            if not isinstance(item, dict):
+                continue
+            sample = {
+                str(key): float(value)
+                for key, value in item.items()
+                if isinstance(value, (int, float))
+            }
+            if sample:
+                samples.append(sample)
+        return samples
+
+    def _fallback_metric_history(self, incident: Incident) -> list[dict[str, float]]:
+        context_samples = self._metric_history_from_context(incident)
+        if context_samples:
+            return context_samples
+        defaults = {
+            "p95_latency_ms": 420.0,
+            "error_rate": 0.01,
+            "up": 1.0,
+            "queue_depth": 45.0,
+            "cpu_utilization": 0.45,
+            "memory_usage_pct": 55.0,
+            "heap_usage_pct": 55.0,
+            "worker_throughput": 80.0,
+        }
+        keys = set(defaults) | set(incident.metrics)
+        samples: list[dict[str, float]] = []
+        for index in range(max(self.settings.anomaly_min_samples, 12)):
+            scale = 1.0 + (((index % 9) - 4) * 0.025)
+            samples.append({key: round(defaults.get(key, float(incident.metrics.get(key, 1.0)) or 1.0) * scale, 6) for key in keys})
+        return samples

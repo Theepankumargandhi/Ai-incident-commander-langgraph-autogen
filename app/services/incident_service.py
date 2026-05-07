@@ -6,6 +6,7 @@ from collections import defaultdict
 from typing import Callable
 
 from app.core.analytics import IncidentAnalytics
+from app.core.judge_tuning import JudgeFineTuneManager
 from app.core.optimizer import AgentOptimizer
 from app.config import Settings
 from app.core.benchmark import BenchmarkEngine
@@ -13,6 +14,7 @@ from app.core.feedback import FeedbackLearningLoop
 from app.core.postmortem import PostmortemExporter
 from app.core.profiles import DEFAULT_PROFILES, get_profile
 from app.core.projections import NullProjector
+from app.core.runbooks import RunbookRAGEngine
 from app.core.safe_remediation import SafeRemediationGateway
 from app.core.simulation import AdversarialSimulationLab
 from app.core.synthetic import SyntheticIncidentGenerator
@@ -41,6 +43,8 @@ from app.models import (
     PolicyVerdict,
     RemediationReceipt,
     RemediationRequest,
+    RunbookDocument,
+    RunbookSearchHit,
     RunStatus,
     RunComparison,
     RunCostSummary,
@@ -98,6 +102,8 @@ class IncidentService:
         simulation_lab: AdversarialSimulationLab,
         feedback_loop: FeedbackLearningLoop,
         service_graph: ServiceKnowledgeGraph,
+        judge_fine_tune_manager: JudgeFineTuneManager | None = None,
+        runbook_engine: RunbookRAGEngine | None = None,
     ) -> None:
         self.settings = settings
         self.incident_store = incident_store
@@ -122,6 +128,8 @@ class IncidentService:
         self.simulation_lab = simulation_lab
         self.feedback_loop = feedback_loop
         self.service_graph = service_graph
+        self.judge_fine_tune_manager = judge_fine_tune_manager or JudgeFineTuneManager(settings)
+        self.runbook_engine = runbook_engine
 
     def list_incidents(self) -> list[Incident]:
         return sorted(self.incident_store.list(), key=lambda incident: incident.updated_at, reverse=True)
@@ -143,6 +151,40 @@ class IncidentService:
 
     def list_memory_entries(self) -> list[MemoryEntry]:
         return sorted(self.memory_store.list(), key=lambda entry: entry.updated_at, reverse=True)
+
+    def list_runbooks(self) -> list[RunbookDocument]:
+        if self.runbook_engine is None:
+            return []
+        return self.runbook_engine.list_documents()
+
+    def ingest_runbooks(self) -> list[RunbookDocument]:
+        if self.runbook_engine is None:
+            return []
+        return self.runbook_engine.ingest_directory()
+
+    def create_runbook(self, payload: RunbookDocument) -> RunbookDocument:
+        if self.runbook_engine is None:
+            raise ValueError("Runbook RAG engine is not configured.")
+        return self.runbook_engine.ingest_document(
+            title=payload.title,
+            content=payload.content,
+            service=payload.service,
+            environment=payload.environment,
+            source_path=payload.source_path,
+            tags=payload.tags,
+            metadata=payload.metadata,
+        )
+
+    def search_runbooks(
+        self,
+        query: str,
+        service: str | None = None,
+        environment: str | None = None,
+        limit: int = 5,
+    ) -> list[RunbookSearchHit]:
+        if self.runbook_engine is None:
+            return []
+        return self.runbook_engine.search(query, service=service, environment=environment, limit=limit)
 
     def list_remediations(self) -> list[RemediationReceipt]:
         return sorted(self.remediation_store.list(), key=lambda item: item.executed_at, reverse=True)
@@ -477,6 +519,15 @@ class IncidentService:
             self.list_runs(),
             self.list_benchmarks(),
             self.list_jobs(),
+        )
+
+    def dora_sre_dashboard(self, window_days: int = 30):
+        return self.analytics.dora_sre_dashboard(
+            self.list_incidents(),
+            self.list_runs(),
+            self.list_jobs(),
+            self.list_remediations(),
+            window_days=window_days,
         )
 
     def compare_runs(self, left_run_id: str, right_run_id: str) -> RunComparison:

@@ -45,6 +45,9 @@ The current version is a strong end to end platform prototype with real connecto
 23. Artifact-guided multimodal reasoning over attached Grafana screenshots, architecture diagrams, and trace artifacts using their titles, descriptions, extracted text, annotations, and related service links
 24. Human feedback learning that folds approvals, overrides, and corrections back into future investigations
 25. A service knowledge graph that feeds blast radius, dependency paths, and graph-backed causal reasoning
+26. Isolation Forest anomaly detection over Prometheus metric history before the workflow hands evidence to AutoGen
+27. RAG-backed runbook retrieval that indexes Markdown or text procedures, embeds them, and cites matching snippets before AutoGen begins
+28. DORA and SRE reliability analytics with MTTR, change failure, deployment frequency, automation, latency, cost, and blocked-action metrics
 
 ### Real connectors with safe fallback behavior
 
@@ -159,6 +162,8 @@ The current codebase also includes these higher weightage engineering layers:
 15. artifact-guided multimodal reasoning over screenshot descriptions, extracted annotations, architecture notes, and trace text
 16. operator feedback learning that changes future guidance, preferred actions, and discouraged actions
 17. service graph reasoning that enriches causal analysis with blast radius and dependency paths
+18. RAG runbook retrieval with service and environment filters, embedding fallback, and persisted citations in the incident context
+19. DORA/SRE scorecard analytics exposed through the API and rendered in the command deck
 
 ## Investigation Stack
 
@@ -267,6 +272,82 @@ The backend exposes a few helpful operational endpoints:
 
 These make it easy to verify whether the service is alive, ready, and running in real mode or fallback mode for each connector.
 
+## Runbook RAG Engine
+
+The backend includes a lightweight RAG layer for operator runbooks. It can ingest Markdown and text files from `RUNBOOK_DIR`, generate embeddings with the configured OpenAI endpoint, and fall back to deterministic local embeddings when model access is unavailable.
+
+Useful routes:
+
+1. `POST /runbooks/ingest` indexes every `.md`, `.markdown`, and `.txt` file under `RUNBOOK_DIR`
+2. `POST /runbooks` stores or updates one runbook document directly
+3. `GET /runbooks` lists indexed documents
+4. `GET /runbooks/search?query=latency&service=checkout-api` returns ranked snippets with source, score, service, and environment metadata
+
+During incident processing, matching runbook snippets are written into `incident.context.runbook_hits` during the memory stage. The AutoGen runbook role reads those citations before the final recommendation is produced, so procedures and historical memory both inform the investigation.
+
+## DORA And SRE Metrics
+
+`GET /analytics/dora-sre` returns a reliability scorecard for the selected window. The dashboard computes DORA-style deployment frequency, change failure rate, failed deployment recovery time, and SRE operating indicators including MTTR, automation success, run success, blocked-action rate, p95 run latency, average run cost, and recurring service rate.
+
+The frontend command deck renders this response in the DORA/SRE panel so operators can see delivery and reliability signals next to active incident workflow data.
+
+## Webhook Integrations
+
+The backend can ingest alert webhooks directly from PagerDuty and OpsGenie, convert them into first-class incidents, and immediately trigger the investigation workflow.
+
+| Provider | Endpoint | Verification |
+| --- | --- | --- |
+| PagerDuty | `POST /webhooks/pagerduty` | HMAC SHA-256 signature in `x-pagerduty-signature` using `PAGERDUTY_WEBHOOK_SECRET` |
+| OpsGenie | `POST /webhooks/opsgenie` | Static token in `x-opsgenie-webhook-secret` using `OPSGENIE_WEBHOOK_SECRET` |
+
+PagerDuty v2 payloads are mapped from the first `messages[]` event. OpsGenie payloads are mapped from `alert`. In both cases the platform extracts title, severity, service, environment, metric hints, and alert details into `incident.context.alert_details`.
+
+Set `OPSGENIE_WEBHOOK_SECRET_HEADER` if your OpsGenie integration sends the token under a different header name.
+
+## Plugin Development Guide
+
+The platform loads built-in plugins from `app/plugins/builtin/` and custom plugins from `PLUGIN_DIR`. Plugins implement one of the abstract base classes in `app/plugins/base.py`: `ObservabilityPlugin`, `NotificationPlugin`, `RemediationPlugin`, or `AgentPlugin`.
+
+Loaded plugins are visible at `GET /plugins` with `name`, `type`, `version`, and `status`. Runtime lookup is available through `app.plugins.registry.get_plugin(type, name)`.
+
+Minimal custom Datadog observability plugin:
+
+```python
+# $PLUGIN_DIR/datadog_plugin.py
+import os
+import httpx
+
+from app.plugins.base import ObservabilityPlugin
+
+
+class DatadogPlugin(ObservabilityPlugin):
+    name = "datadog"
+    version = "0.1.0"
+
+    def __init__(self, settings=None):
+        self.api_key = os.getenv("DATADOG_API_KEY", "")
+        self.app_key = os.getenv("DATADOG_APP_KEY", "")
+        self.base_url = os.getenv("DATADOG_API_BASE", "https://api.datadoghq.com")
+
+    def collect_metrics(self, incident):
+        query = f"avg:trace.http.request.duration{{service:{incident.service}}}"
+        response = httpx.get(
+            f"{self.base_url}/api/v1/query",
+            params={"from": "now-5m", "to": "now", "query": query},
+            headers={"DD-API-KEY": self.api_key, "DD-APPLICATION-KEY": self.app_key},
+            timeout=5,
+        )
+        response.raise_for_status()
+        points = response.json().get("series", [{}])[0].get("pointlist", [])
+        latest = points[-1][1] if points else 0
+        return {"p95_latency_ms": float(latest or 0)}
+
+    def collect_logs(self, incident):
+        return [f"Datadog metric query completed for {incident.service}"]
+```
+
+Set `PLUGIN_DIR=/path/to/plugins`, restart the backend, then check `GET /plugins` for `datadog`.
+
 ## Notable API Endpoints
 
 Beyond the health routes, a few endpoints are especially useful during demos and evaluation:
@@ -287,6 +368,9 @@ Beyond the health routes, a few endpoints are especially useful during demos and
 14. `GET /service-graph` to inspect the service dependency graph or a service scoped view
 15. `GET /feedback/summary` to inspect learned operator guidance for a service
 16. `POST /runs/{run_id}/feedback` to record corrections, overrides, and operator preferences
+17. `POST /runbooks/ingest` to index runbook files from `RUNBOOK_DIR`
+18. `GET /runbooks/search` to retrieve runbook snippets for an incident or service
+19. `GET /analytics/dora-sre` to inspect DORA and SRE reliability metrics
 
 ## Repository Structure
 
@@ -337,7 +421,11 @@ The most important values are:
 10. `SAFE_REMEDIATION_URL` and `REMEDIATION_TOKEN` for controlled action execution
 11. `SAFE_REMEDIATION_ALLOWED_ACTIONS`, `SAFE_REMEDIATION_ALLOWED_ENVIRONMENTS`, and `SAFE_REMEDIATION_ALLOWED_SERVICES` for gateway policy
 12. `ENABLE_TRACING`, `TRACING_SERVICE_NAME`, and `OTLP_ENDPOINT` for distributed tracing
-13. `AUTH_ENABLED`, `VIEWER_API_TOKEN`, and `OPERATOR_API_TOKEN` if you want the API protected
+13. `ENABLE_ANOMALY_DETECTION`, `ANOMALY_LOOKBACK_MINUTES`, `ANOMALY_STEP_SECONDS`, `ANOMALY_CONTAMINATION`, and `ANOMALY_MIN_SAMPLES` for the pre-LLM Isolation Forest metric layer
+14. `PAGERDUTY_WEBHOOK_SECRET`, `OPSGENIE_WEBHOOK_SECRET`, and `OPSGENIE_WEBHOOK_SECRET_HEADER` for alert webhook ingestion
+15. `RUNBOOK_DIR` for Markdown or text runbooks that should be indexed by the RAG layer
+16. `PLUGIN_DIR` for custom plugin discovery at backend startup
+17. `AUTH_ENABLED`, `VIEWER_API_TOKEN`, and `OPERATOR_API_TOKEN` if you want the API protected
 
 ### Frontend environment
 
@@ -430,6 +518,33 @@ pytest -q
 cd frontend
 npm run build
 ```
+
+## Load Testing
+
+Locust load tests live in `locust/` and exercise incident creation, investigation processing, incident listing, and per-run cost checks with 1 to 3 seconds of think time.
+
+Run the interactive UI:
+
+```bash
+locust -f locust/locustfile.py
+```
+
+Run headless:
+
+```bash
+locust -f locust/locustfile.py --host http://127.0.0.1:8000 --headless -u 10 -r 2 --run-time 60s
+```
+
+Set `LOCUST_BEARER_TOKEN` when `AUTH_ENABLED=true`.
+
+Example local demo-mode results:
+
+| Users | Run Time | RPS | p50 | p95 | Error Rate |
+| ---: | --- | ---: | ---: | ---: | ---: |
+| 5 | 30s | 2.4 | 180ms | 920ms | 0.0% |
+| 10 | 60s | 4.8 | 210ms | 1250ms | 0.0% |
+
+CI runs `5` users for `30s` and fails if error rate exceeds `5%` or p95 latency exceeds `2000ms`.
 
 ## Demo Assets
 
